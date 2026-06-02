@@ -1,16 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.future import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import APIRouter, HTTPException, status
 from typing import List, Optional
 from pydantic import BaseModel
 
-from app.core.database import get_db
-from app.models.models import Product, Simulation
 from app.schemas.schemas import (
     SimulatorRequest, SimulatorResult, 
-    ComparatorRequest, ComparatorResponse, MarketplaceComparisonDetails,
+    ComparatorResponse, MarketplaceComparisonDetails,
     SmartPricingRequest, SmartPricingResponse, SimulationResponse
 )
+from app.services.sheets import sheets_db
 from app.services.pricing import simulate_pricing_engine, get_loaded_unit_cost
 from app.services.smart_pricing import calculate_smart_pricing
 
@@ -22,31 +19,28 @@ class ExtendedComparatorRequest(BaseModel):
     shipping_override: Optional[float] = None
 
 @router.post("/simulate", response_model=SimulatorResult)
-async def simulate_price(request: SimulatorRequest, db: AsyncSession = Depends(get_db)):
+async def simulate_price(request: SimulatorRequest):
     try:
-        # Run pricing engine
-        result = await simulate_pricing_engine(db, request)
+        # Run solver pricing engine
+        result = await simulate_pricing_engine(sheets_db, request)
         
-        # Log simulation to database
-        product_result = await db.execute(select(Product).where(Product.id == request.product_id))
-        product = product_result.scalar_one_or_none()
+        # Log simulation to sheets
+        product = sheets_db.get_product(request.product_id)
         
-        sim_log = Simulation(
-            product_id=request.product_id,
-            product_sku=product.sku if product else None,
-            product_name=product.name if product else None,
-            marketplace=request.marketplace,
-            mode=request.mode,
-            input_value=request.input_value,
-            calculated_price=result.price,
-            calculated_profit=result.net_profit,
-            calculated_margin=result.margin,
-            calculated_roi=result.roi,
-            calculated_fees=result.marketplace_fees,
-            calculated_shipping=result.shipping_cost
-        )
-        db.add(sim_log)
-        await db.commit()
+        sim_dict = {
+            "product_sku": product["sku"] if product else "CUSTOM",
+            "product_name": product["name"] if product else "CUSTOM",
+            "marketplace": request.marketplace,
+            "mode": request.mode,
+            "input_value": request.input_value,
+            "calculated_price": result.price,
+            "calculated_profit": result.net_profit,
+            "calculated_margin": result.margin,
+            "calculated_roi": result.roi,
+            "calculated_fees": result.marketplace_fees,
+            "calculated_shipping": result.shipping_cost
+        }
+        sheets_db.create_simulation(sim_dict)
         
         return result
     except ValueError as e:
@@ -55,26 +49,27 @@ async def simulate_price(request: SimulatorRequest, db: AsyncSession = Depends(g
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/history", response_model=List[SimulationResponse])
-async def get_simulation_history(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Simulation).order_by(Simulation.created_at.desc()).limit(50))
-    return result.scalars().all()
+async def get_simulation_history():
+    try:
+        history = sheets_db.get_simulations()
+        # Sort and limit top 50 in memory
+        history.sort(key=lambda x: x["created_at"], reverse=True)
+        return history[:50]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/compare", response_model=ComparatorResponse)
-async def compare_marketplaces(request: ExtendedComparatorRequest, db: AsyncSession = Depends(get_db)):
-    product_result = await db.execute(select(Product).where(Product.id == request.product_id))
-    product = product_result.scalar_one_or_none()
+async def compare_marketplaces(request: ExtendedComparatorRequest):
+    product = sheets_db.get_product(request.product_id)
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
         
-    unit_cost = await get_loaded_unit_cost(db, product)
+    unit_cost = await get_loaded_unit_cost(sheets_db, product)
     
-    # Determine reference selling price for comparison
     ref_price = request.reference_price
     if not ref_price or ref_price <= 0:
-        # Default: 1.5x of fully loaded cost or R$ 100 minimum
         ref_price = max(unit_cost * 1.5, 100.0)
         
-    # Standardize to 2 decimals
     ref_price = round(ref_price, 2)
     
     marketplaces = [
@@ -89,15 +84,15 @@ async def compare_marketplaces(request: ExtendedComparatorRequest, db: AsyncSess
     
     for mp in marketplaces:
         sim_req = SimulatorRequest(
-            product_id=product.id,
+            product_id=product["id"],
             marketplace=mp["key"],
-            mode=1, # Mode 1: Price given
+            mode=1,
             input_value=ref_price,
             shipping_override=request.shipping_override
         )
         
         try:
-            res = await simulate_pricing_engine(db, sim_req)
+            res = await simulate_pricing_engine(sheets_db, sim_req)
             detail = MarketplaceComparisonDetails(
                 marketplace_name=mp["name"],
                 price=res.price,
@@ -110,7 +105,6 @@ async def compare_marketplaces(request: ExtendedComparatorRequest, db: AsyncSess
             )
             comparison_details.append(detail)
             
-            # Identify most profitable marketplace
             if res.net_profit > best_profit:
                 best_profit = res.net_profit
                 best_mp = mp["name"]
@@ -118,17 +112,18 @@ async def compare_marketplaces(request: ExtendedComparatorRequest, db: AsyncSess
             continue
             
     return ComparatorResponse(
-        product_name=product.name,
-        sku=product.sku,
+        product_name=product["name"],
+        sku=product["sku"],
         unit_cost=unit_cost,
         comparisons=comparison_details,
         best_marketplace=best_mp
     )
 
 @router.post("/smart-pricing", response_model=SmartPricingResponse)
-async def get_smart_pricing_recommendations(request: SmartPricingRequest, db: AsyncSession = Depends(get_db)):
+async def get_smart_pricing_recommendations(request: SmartPricingRequest):
     try:
-        res = await calculate_smart_pricing(db, request)
+        res = await calculate_smart_pricing(sheets_db, request)
         return res
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+Prefix = ""
