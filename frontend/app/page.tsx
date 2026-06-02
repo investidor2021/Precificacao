@@ -14,6 +14,7 @@ import {
 import { 
   BarChart, 
   Bar, 
+  Cell, 
   XAxis, 
   YAxis, 
   CartesianGrid, 
@@ -236,7 +237,7 @@ export default function Dashboard() {
                       <Bar dataKey="average_profit" name="Lucro Médio (R$)" radius={[6, 6, 0, 0]}>
                         {data?.marketplace_comparison.map((entry, index) => {
                           const colors = ["#10b981", "#3b82f6", "#f97316"];
-                          return <cell key={`cell-${index}`} fill={colors[index % colors.length]} />;
+                          return <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />;
                         })}
                       </Bar>
                     </BarChart>

@@ -10,7 +10,8 @@ import {
   X,
   FileText,
   AlertTriangle,
-  Coins
+  Coins,
+  RefreshCw
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Product, Packaging, OperationalCost } from '@/types';
