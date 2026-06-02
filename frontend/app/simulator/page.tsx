@@ -1,0 +1,328 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { 
+  Calculator, 
+  ShoppingBag, 
+  HelpCircle,
+  TrendingUp,
+  Percent,
+  DollarSign,
+  Info,
+  Layers,
+  ChevronRight,
+  AlertCircle
+} from 'lucide-react';
+import { api } from '@/lib/api';
+import { Product, SimulatorResult } from '@/types';
+
+export default function SimulatorPage() {
+  const [products, setProducts] = useState<Product[]>([]);
+  const [selectedProductId, setSelectedProductId] = useState<string>('');
+  const [marketplace, setMarketplace] = useState<string>('mercado_livre_classic');
+  const [mode, setMode] = useState<number>(1); // 1 = Price, 2 = Margin, 3 = Profit
+  const [inputValue, setInputValue] = useState<number>(0);
+  const [shippingOverride, setShippingOverride] = useState<string>('');
+  
+  const [result, setResult] = useState<SimulatorResult | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    loadProducts();
+  }, []);
+
+  const loadProducts = async () => {
+    try {
+      const res = await api.getProducts();
+      setProducts(res);
+      if (res.length > 0) {
+        setSelectedProductId(res[0].id.toString());
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  // Run calculation
+  const handleCalculate = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!selectedProductId) return;
+
+    setLoading(true);
+    setError(null);
+    try {
+      const overrideVal = shippingOverride !== '' ? parseFloat(shippingOverride) : undefined;
+      const res = await api.simulate({
+        product_id: parseInt(selectedProductId),
+        marketplace,
+        mode,
+        input_value: inputValue,
+        shipping_override: overrideVal
+      });
+      setResult(res);
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || 'Erro ao realizar cálculo de precificação.');
+      setResult(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Trigger calculation when selectors change to make it feel alive!
+  useEffect(() => {
+    if (selectedProductId && inputValue > 0) {
+      handleCalculate();
+    }
+  }, [selectedProductId, marketplace, mode]);
+
+  const selectedProduct = products.find(p => p.id.toString() === selectedProductId);
+
+  return (
+    <div className="p-6 md:p-8 space-y-8 max-w-7xl mx-auto w-full">
+      {/* Header */}
+      <div>
+        <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-slate-100">
+          Simulador de Precificação
+        </h1>
+        <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">
+          Simule preços ideais baseado em margens, custos e taxas dos marketplaces
+        </p>
+      </div>
+
+      {products.length === 0 ? (
+        <div className="flex flex-col items-center justify-center p-12 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm text-center max-w-lg mx-auto">
+          <AlertCircle className="w-12 h-12 text-slate-500 mb-4" />
+          <h3 className="text-lg font-bold dark:text-white mb-2">Nenhum Produto Cadastrado</h3>
+          <p className="text-slate-400 text-sm mb-4">Cadastre produtos no estoque antes de realizar simulações.</p>
+          <a href="/products" className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-semibold transition">
+            Ir para Cadastros
+          </a>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 items-start">
+          {/* Inputs Panel */}
+          <div className="lg:col-span-2 space-y-6 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-6 rounded-2xl shadow-sm">
+            <h3 className="font-bold text-lg dark:text-white flex items-center space-x-2">
+              <Calculator className="w-5 h-5 text-emerald-400" />
+              <span>Configurar Simulação</span>
+            </h3>
+
+            <form onSubmit={handleCalculate} className="space-y-6">
+              {/* Product selector */}
+              <div className="space-y-1">
+                <label className="text-xs text-slate-400 font-bold uppercase">Produto Alvo</label>
+                <select
+                  value={selectedProductId}
+                  onChange={(e) => setSelectedProductId(e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                >
+                  {products.map(p => (
+                    <option key={p.id} value={p.id}>{p.sku} — {p.name}</option>
+                  ))}
+                </select>
+                {selectedProduct && (
+                  <div className="text-[10px] text-slate-400 mt-1 flex justify-between">
+                    <span>Custo Carregado: R$ {selectedProduct.unit_cost.toFixed(2)}</span>
+                    <span>Peso: {selectedProduct.weight} kg</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Marketplace Selector */}
+              <div className="space-y-1">
+                <label className="text-xs text-slate-400 font-bold uppercase">Canal de Venda</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { key: 'mercado_livre_classic', label: 'ML Clássico' },
+                    { key: 'mercado_livre_premium', label: 'ML Premium' },
+                    { key: 'shopee', label: 'Shopee' }
+                  ].map((mp) => (
+                    <button
+                      key={mp.key} type="button"
+                      onClick={() => setMarketplace(mp.key)}
+                      className={`py-2 rounded-lg text-xs font-semibold border transition ${
+                        marketplace === mp.key
+                          ? 'bg-emerald-500/10 border-emerald-500 text-emerald-500'
+                          : 'border-slate-200 dark:border-slate-850 hover:bg-slate-900 text-slate-400'
+                      }`}
+                    >
+                      {mp.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Solve Mode Selector */}
+              <div className="space-y-1">
+                <label className="text-xs text-slate-400 font-bold uppercase">Modo de Cálculo</label>
+                <div className="flex space-x-1 p-1 bg-slate-100 dark:bg-slate-900 rounded-lg">
+                  {[
+                    { modeNum: 1, label: 'Modo 1: Preço', desc: 'Preço Final' },
+                    { modeNum: 2, label: 'Modo 2: Margem', desc: 'Margem %' },
+                    { modeNum: 3, modeLabel: 'Modo 3: Lucro', label: 'Modo 3: Lucro', desc: 'Lucro R$' }
+                  ].map((m) => (
+                    <button
+                      key={m.modeNum} type="button"
+                      onClick={() => { setMode(m.modeNum); setInputValue(0); }}
+                      className={`flex-1 py-1.5 rounded-md text-[10px] sm:text-xs font-semibold transition ${
+                        mode === m.modeNum
+                          ? 'bg-white dark:bg-slate-800 text-slate-800 dark:text-white shadow-sm'
+                          : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      {m.label.split(':')[1].trim()}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Input Value based on mode */}
+              <div className="space-y-1">
+                <label className="text-xs text-slate-400 font-bold uppercase">
+                  {mode === 1 && 'Preço de Venda Informado (R$)'}
+                  {mode === 2 && 'Margem de Lucro Desejada (%)'}
+                  {mode === 3 && 'Lucro Líquido Desejado (R$)'}
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3 top-2.5 text-slate-500 text-sm font-semibold">
+                    {mode === 2 ? '%' : 'R$'}
+                  </span>
+                  <input
+                    type="number" step="0.01" min="0" required
+                    value={inputValue || ''}
+                    onChange={(e) => setInputValue(parseFloat(e.target.value) || 0)}
+                    className="w-full pl-9 pr-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    placeholder="0.00"
+                  />
+                </div>
+              </div>
+
+              {/* Advanced Shipping Override */}
+              <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-900">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs text-slate-400 font-bold uppercase flex items-center space-x-1.5">
+                    <span>Sobrescrever Frete (Opcional)</span>
+                  </label>
+                </div>
+                <div className="relative">
+                  <span className="absolute left-3 top-2.5 text-slate-500 text-sm font-semibold">R$</span>
+                  <input
+                    type="number" step="0.01" min="0"
+                    placeholder="Padrão calculado"
+                    value={shippingOverride}
+                    onChange={(e) => setShippingOverride(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold text-sm shadow-lg shadow-emerald-500/10 transition flex items-center justify-center space-x-2"
+              >
+                {loading ? 'Calculando...' : 'Calcular Precificação'}
+              </button>
+            </form>
+          </div>
+
+          {/* Results Panel */}
+          <div className="lg:col-span-3 space-y-6">
+            {error && (
+              <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-red-500 flex items-center space-x-2 text-sm">
+                <AlertCircle className="w-5 h-5 flex-shrink-0" />
+                <span>{error}</span>
+              </div>
+            )}
+
+            {!result && !error && (
+              <div className="h-full flex flex-col items-center justify-center p-12 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl text-center text-slate-500 min-h-[400px]">
+                <Info className="w-12 h-12 text-slate-600 mb-3" />
+                <p className="font-semibold text-slate-400">Pronto para calcular</p>
+                <p className="text-xs text-slate-500 mt-1">Insira os dados à esquerda e clique em calcular.</p>
+              </div>
+            )}
+
+            {result && (
+              <div className="bg-slate-950 border border-slate-850 rounded-2xl shadow-xl overflow-hidden text-slate-100">
+                {/* Header Summary */}
+                <div className="p-6 bg-gradient-to-r from-emerald-500/20 to-teal-500/10 border-b border-slate-900 space-y-4">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Preço de Venda Sugerido</span>
+                    <span className="px-2.5 py-1 rounded bg-slate-900 border border-slate-800 text-[10px] uppercase font-black tracking-wider text-emerald-400">
+                      {marketplace.replace('_', ' ').replace('classic', 'clássico')}
+                    </span>
+                  </div>
+                  
+                  <div className="flex items-baseline justify-between">
+                    <h2 className="text-4xl font-black text-white">R$ {result.price.toFixed(2)}</h2>
+                    <div className="text-right">
+                      <span className="text-xs text-slate-400 block">Lucro Líquido</span>
+                      <span className="text-xl font-bold text-emerald-400">R$ {result.net_profit.toFixed(2)}</span>
+                    </div>
+                  </div>
+
+                  {/* Profitability Badges */}
+                  <div className="grid grid-cols-2 gap-4 pt-2">
+                    <div className="p-3 bg-slate-900/60 rounded-xl border border-slate-900/80 flex items-center justify-between">
+                      <span className="text-xs text-slate-400">Margem Líquida</span>
+                      <span className="font-bold text-emerald-400">{result.margin.toFixed(1)}%</span>
+                    </div>
+                    <div className="p-3 bg-slate-900/60 rounded-xl border border-slate-900/80 flex items-center justify-between">
+                      <span className="text-xs text-slate-400">ROI</span>
+                      <span className="font-bold text-emerald-400">{result.roi.toFixed(1)}%</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Breakdown Details */}
+                <div className="p-6 space-y-4">
+                  <h4 className="text-xs text-slate-400 font-bold uppercase tracking-wider">Demonstrativo Detalhado</h4>
+
+                  <div className="divide-y divide-slate-900">
+                    <div className="py-3 flex justify-between text-sm">
+                      <span className="text-slate-400">Custo Total de Compra (Insumos + Despesas)</span>
+                      <span className="font-medium text-slate-200">R$ {result.unit_cost.toFixed(2)}</span>
+                    </div>
+                    <div className="py-3 flex justify-between text-sm">
+                      <span className="text-slate-400">Comissões & Tarifas do Canal</span>
+                      <span className="font-medium text-red-400">- R$ {result.marketplace_fees.toFixed(2)}</span>
+                    </div>
+                    <div className="py-3 flex justify-between text-sm">
+                      <span className="text-slate-400">Frete pago pelo Vendedor</span>
+                      <span className="font-medium text-red-400">- R$ {result.shipping_cost.toFixed(2)}</span>
+                    </div>
+                    <div className="py-3 flex justify-between text-sm">
+                      <span className="text-slate-400">Impostos incidentes</span>
+                      <span className="font-medium text-red-400">- R$ {result.tax_cost.toFixed(2)}</span>
+                    </div>
+                    <div className="py-3 flex justify-between text-sm border-t border-slate-900 font-bold">
+                      <span className="text-slate-200">Markup Final</span>
+                      <span className="text-emerald-400">{result.markup.toFixed(2)}x</span>
+                    </div>
+                  </div>
+
+                  {/* Breakeven Banner */}
+                  <div className="mt-6 p-4 bg-slate-900/80 rounded-xl border border-slate-900 flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      <Info className="w-5 h-5 text-indigo-400" />
+                      <div>
+                        <span className="text-xs text-slate-400 block font-semibold">Ponto de Equilíbrio (Preço Mínimo)</span>
+                        <span className="text-xs text-slate-500">Cobre apenas despesas (Lucro R$ 0)</span>
+                      </div>
+                    </div>
+                    <span className="font-black text-slate-200 text-lg">
+                      R$ {result.breakeven_price.toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
