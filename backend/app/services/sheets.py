@@ -5,6 +5,22 @@ from google.oauth2.service_account import Credentials
 from typing import List, Dict, Any, Optional
 from app.core.config import settings
 
+def safe_int(val: Any, default: int = 0) -> int:
+    if not val:
+        return default
+    try:
+        return int(float(str(val).strip()))
+    except (ValueError, TypeError):
+        pass
+    
+    digits = "".join(c for c in str(val) if c.isdigit())
+    if digits:
+        try:
+            return int(digits)
+        except ValueError:
+            pass
+    return default
+
 SCOPE = [
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive"
@@ -94,7 +110,7 @@ class GoogleSheetsService:
         products = []
         for r in records:
             products.append({
-                "id": int(r.get("id") or 0),
+                "id": safe_int(r.get("id") or 0),
                 "sku": str(r.get("sku")),
                 "name": str(r.get("name")),
                 "category": str(r.get("category") or ""),
@@ -160,7 +176,7 @@ class GoogleSheetsService:
         row_idx = -1
         current_product = None
         for i, r in enumerate(records):
-            if int(r.get("id") or 0) == product_id:
+            if safe_int(r.get("id") or 0) == product_id:
                 row_idx = i + 2  # 1-indexed, +1 for headers
                 current_product = r
                 break
@@ -196,7 +212,7 @@ class GoogleSheetsService:
         ws = self._get_worksheet("produtos")
         records = ws.get_all_records()
         for i, r in enumerate(records):
-            if int(r.get("id") or 0) == product_id:
+            if safe_int(r.get("id") or 0) == product_id:
                 ws.delete_rows(i + 2)
                 return True
         return False
@@ -206,7 +222,7 @@ class GoogleSheetsService:
         ws = self._get_worksheet("embalagens")
         records = ws.get_all_records()
         return [{
-            "id": int(r.get("id") or 0),
+            "id": safe_int(r.get("id") or 0),
             "name": str(r.get("name")),
             "cost": float(r.get("cost") or 0.0),
             "type": str(r.get("type")),
@@ -227,7 +243,7 @@ class GoogleSheetsService:
         ws = self._get_worksheet("embalagens")
         records = ws.get_all_records()
         for i, r in enumerate(records):
-            if int(r.get("id") or 0) == pkg_id:
+            if safe_int(r.get("id") or 0) == pkg_id:
                 ws.delete_rows(i + 2)
                 return True
         return False
@@ -237,7 +253,7 @@ class GoogleSheetsService:
         ws = self._get_worksheet("custos_operacionais")
         records = ws.get_all_records()
         return [{
-            "id": int(r.get("id") or 0),
+            "id": safe_int(r.get("id") or 0),
             "name": str(r.get("name")),
             "amount": float(r.get("amount") or 0.0),
             "type": str(r.get("type")),
@@ -258,7 +274,7 @@ class GoogleSheetsService:
         ws = self._get_worksheet("custos_operacionais")
         records = ws.get_all_records()
         for i, r in enumerate(records):
-            if int(r.get("id") or 0) == op_id:
+            if safe_int(r.get("id") or 0) == op_id:
                 ws.delete_rows(i + 2)
                 return True
         return False
@@ -358,7 +374,7 @@ class GoogleSheetsService:
                 "product_sku": str(r.get("product_sku") or ""),
                 "product_name": str(r.get("product_name") or ""),
                 "marketplace": str(r.get("marketplace") or ""),
-                "mode": int(r.get("mode") or 1),
+                "mode": safe_int(r.get("mode") or 1),
                 "input_value": float(r.get("input_value") or 0.0),
                 "calculated_price": float(r.get("calculated_price") or 0.0),
                 "calculated_profit": float(r.get("calculated_profit") or 0.0),
