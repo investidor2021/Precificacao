@@ -365,7 +365,7 @@ class GoogleSheetsService:
 
     # --- SIMULATIONS ---
     def get_simulations(self) -> List[Dict[str, Any]]:
-        ws = self._get_worksheet("simulations")
+        ws = self._get_worksheet("simulacoes")
         records = ws.get_all_records()
         simulations = []
         for i, r in enumerate(records):
@@ -385,7 +385,7 @@ class GoogleSheetsService:
         return simulations
 
     def create_simulation(self, sim_dict: Dict[str, Any]) -> Dict[str, Any]:
-        ws = self._get_worksheet("simulations")
+        ws = self._get_worksheet("simulacoes")
         created_at = datetime.datetime.utcnow().isoformat()
         row_values = [
             sim_dict.get("product_sku") or "",
