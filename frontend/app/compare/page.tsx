@@ -21,6 +21,7 @@ export default function ComparePage() {
   const [selectedItemKey, setSelectedItemKey] = useState<string>('');
   const [referencePrice, setReferencePrice] = useState<string>('');
   const [shippingOverride, setShippingOverride] = useState<string>('');
+  const [freeShipping, setFreeShipping] = useState(false);
 
   const [compareData, setCompareData] = useState<ComparatorResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -70,7 +71,8 @@ export default function ComparePage() {
         product_id: itemId,
         reference_price: refPriceVal && refPriceVal > 0 ? refPriceVal : undefined,
         shipping_override: overrideVal,
-        is_kit: isKit
+        is_kit: isKit,
+        free_shipping: freeShipping
       });
       setCompareData(res);
     } catch (err: any) {
@@ -82,14 +84,17 @@ export default function ComparePage() {
     }
   };
 
-  // Re-run comparison when product updates to keep view reactive
+  // Reset custom reference price to let backend decide standard 1.5x cost only when item changes
+  useEffect(() => {
+    setReferencePrice('');
+  }, [selectedItemKey]);
+
+  // Re-run comparison when product updates or free shipping is toggled
   useEffect(() => {
     if (selectedItemKey) {
-      // Reset custom reference price to let backend decide standard 1.5x cost, or manually fill if needed
-      setReferencePrice('');
       handleCompare();
     }
-  }, [selectedItemKey]);
+  }, [selectedItemKey, freeShipping]);
 
   const selectedItem = selectedItemKey.startsWith('kit_')
     ? kits.find(k => `kit_${k.id}` === selectedItemKey)
@@ -120,64 +125,83 @@ export default function ComparePage() {
         <div className="space-y-8">
           {/* Settings Bar */}
           <div className="p-6 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm">
-            <form onSubmit={handleCompare} className="grid grid-cols-1 md:grid-cols-4 gap-6 items-end">
-              <div className="space-y-1">
-                <label className="text-xs text-slate-400 font-bold uppercase">Selecionar Produto / Kit</label>
-                <select
-                  value={selectedItemKey}
-                  onChange={(e) => setSelectedItemKey(e.target.value)}
-                  className="w-full px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-800 dark:text-slate-200"
-                >
-                  <optgroup label="Produtos">
-                    {products.map(p => (
-                      <option key={`product_${p.id}`} value={`product_${p.id}`}>{p.sku} — {p.name}</option>
-                    ))}
-                  </optgroup>
-                  {kits.length > 0 && (
-                    <optgroup label="Kits">
-                      {kits.map(k => (
-                        <option key={`kit_${k.id}`} value={`kit_${k.id}`}>{k.sku} — {k.name}</option>
+            <form onSubmit={handleCompare} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6 items-end">
+                <div className="space-y-1">
+                  <label className="text-xs text-slate-400 font-bold uppercase">Selecionar Produto / Kit</label>
+                  <select
+                    value={selectedItemKey}
+                    onChange={(e) => setSelectedItemKey(e.target.value)}
+                    className="w-full px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-800 dark:text-slate-200"
+                  >
+                    <optgroup label="Produtos">
+                      {products.map(p => (
+                        <option key={`product_${p.id}`} value={`product_${p.id}`}>{p.sku} — {p.name}</option>
                       ))}
                     </optgroup>
-                  )}
-                </select>
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-xs text-slate-400 font-bold uppercase">Preço de Referência (Opcional)</label>
-                <div className="relative">
-                  <span className="absolute left-3 top-2.5 text-slate-500 text-sm font-semibold">R$</span>
-                  <input
-                    type="text"
-                    placeholder={selectedItem ? `Padrão: R$ ${(selectedItem.unit_cost * 1.5).toFixed(2)}` : '0,00'}
-                    value={referencePrice}
-                    onChange={(e) => setReferencePrice(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-800 dark:text-slate-200"
-                  />
+                    {kits.length > 0 && (
+                      <optgroup label="Kits">
+                        {kits.map(k => (
+                          <option key={`kit_${k.id}`} value={`kit_${k.id}`}>{k.sku} — {k.name}</option>
+                        ))}
+                      </optgroup>
+                    )}
+                  </select>
                 </div>
-              </div>
 
-              <div className="space-y-1">
-                <label className="text-xs text-slate-400 font-bold uppercase">Sobrescrever Frete (Opcional)</label>
-                <div className="relative">
-                  <span className="absolute left-3 top-2.5 text-slate-500 text-sm font-semibold">R$</span>
-                  <input
-                    type="text"
-                    placeholder="Padrão do canal"
-                    value={shippingOverride}
-                    onChange={(e) => setShippingOverride(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-800 dark:text-slate-200"
-                  />
+                <div className="space-y-1">
+                  <label className="text-xs text-slate-400 font-bold uppercase">Preço de Referência (Opcional)</label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-2.5 text-slate-500 text-sm font-semibold">R$</span>
+                    <input
+                      type="text"
+                      placeholder={selectedItem ? `Padrão: R$ ${(selectedItem.unit_cost * 1.5).toFixed(2)}` : '0,00'}
+                      value={referencePrice}
+                      onChange={(e) => setReferencePrice(e.target.value)}
+                      className="w-full pl-9 pr-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-800 dark:text-slate-200"
+                    />
+                  </div>
                 </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs text-slate-400 font-bold uppercase">Sobrescrever Frete (Opcional)</label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-2.5 text-slate-500 text-sm font-semibold">R$</span>
+                    <input
+                      type="text"
+                      placeholder="Padrão do canal"
+                      value={shippingOverride}
+                      onChange={(e) => setShippingOverride(e.target.value)}
+                      className="w-full pl-9 pr-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-800 dark:text-slate-200"
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="submit" disabled={loading}
+                  className="py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg font-bold text-sm shadow-md shadow-emerald-500/10 transition flex items-center justify-center space-x-2"
+                >
+                  <ArrowLeftRight className="w-4 h-4" />
+                  <span>{loading ? 'Comparando...' : 'Comparar Canais'}</span>
+                </button>
               </div>
 
-              <button
-                type="submit" disabled={loading}
-                className="py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg font-bold text-sm shadow-md shadow-emerald-500/10 transition flex items-center justify-center space-x-2"
-              >
-                <ArrowLeftRight className="w-4 h-4" />
-                <span>{loading ? 'Comparando...' : 'Comparar Canais'}</span>
-              </button>
+              <div className="pt-4 border-t border-slate-100 dark:border-slate-900">
+                <label className="flex items-start space-x-3 text-sm text-slate-700 dark:text-slate-350 font-semibold cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={freeShipping}
+                    onChange={(e) => setFreeShipping(e.target.checked)}
+                    className="rounded border-slate-700 bg-slate-950 text-emerald-500 focus:ring-emerald-500 w-4 h-4 mt-0.5"
+                  />
+                  <div>
+                    <span className="block text-slate-900 dark:text-slate-200">Oferecer Frete Grátis Voluntário (Mercado Livre)</span>
+                    <span className="text-[10px] text-slate-500 dark:text-slate-450 block font-normal mt-0.5">
+                      Subsidia o frete mesmo em produtos com preço de referência abaixo de R$ 79,00
+                    </span>
+                  </div>
+                </label>
+              </div>
             </form>
           </div>
 

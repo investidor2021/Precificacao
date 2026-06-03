@@ -137,3 +137,54 @@ async def test_kit_simulation_pricing():
     assert res.price == 100.0
     assert res.net_profit == 34.55
 
+@pytest.mark.asyncio
+async def test_kit_simulation_pricing_free_shipping_under_79():
+    sheets_db = MagicMock()
+    
+    prod_1 = {"id": 1, "sku": "P1", "name": "Prod 1", "purchase_cost": 10.0, "weight": 0.1, "height": 1, "width": 1, "length": 1, "cubic_weight": 0.0, "unit_cost": 10.0}
+    prod_2 = {"id": 2, "sku": "P2", "name": "Prod 2", "purchase_cost": 20.0, "weight": 0.2, "height": 1, "width": 1, "length": 1, "cubic_weight": 0.0, "unit_cost": 20.0}
+    
+    kit = {
+        "id": 1,
+        "sku": "KIT-1",
+        "name": "Kit 1",
+        "weight": 0.5,
+        "height": 2,
+        "width": 2,
+        "length": 2,
+        "purchase_cost": 40.0,
+        "items": [
+            {"product_id": 1, "quantity": 2, "product_sku": "P1", "product_name": "Prod 1", "product_purchase_cost": 10.0},
+            {"product_id": 2, "quantity": 1, "product_sku": "P2", "product_name": "Prod 2", "product_purchase_cost": 20.0}
+        ]
+    }
+    
+    sheets_db.get_kit.return_value = kit
+    sheets_db.get_packaging.return_value = []
+    sheets_db.get_operational_costs.return_value = []
+    sheets_db.get_ml_config.return_value = {
+        "classic_commission_rate": 11.5,
+        "premium_commission_rate": 16.5,
+        "fixed_fee_threshold": 79.0,
+        "fixed_fee": 6.0,
+        "tax_rate": 4.0,
+        "shipping_subsidy_rate": 50.0
+    }
+    
+    req = SimulatorRequest(
+        product_id=1,
+        marketplace="mercado_livre_classic",
+        mode=1,
+        input_value=75.0,
+        is_kit=True,
+        free_shipping=True
+    )
+    
+    res = await simulate_pricing_engine(sheets_db, req)
+    
+    assert res.unit_cost == 40.0
+    assert res.price == 75.0
+    assert res.shipping_cost == 9.95
+    assert res.net_profit == 7.43
+
+

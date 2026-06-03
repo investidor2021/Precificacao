@@ -24,6 +24,7 @@ export default function SimulatorPage() {
   const [mode, setMode] = useState<number>(1); // 1 = Price, 2 = Margin, 3 = Profit
   const [inputValue, setInputValue] = useState<string>('');
   const [shippingOverride, setShippingOverride] = useState<string>('');
+  const [freeShipping, setFreeShipping] = useState(false);
   
   const [result, setResult] = useState<SimulatorResult | null>(null);
   const [loading, setLoading] = useState(false);
@@ -74,7 +75,8 @@ export default function SimulatorPage() {
         mode,
         input_value: parseFormFloat(inputValue),
         shipping_override: overrideVal,
-        is_kit: isKit
+        is_kit: isKit,
+        free_shipping: freeShipping
       });
       setResult(res);
     } catch (err: any) {
@@ -91,7 +93,7 @@ export default function SimulatorPage() {
     if (selectedItemKey && parseFormFloat(inputValue) > 0) {
       handleCalculate();
     }
-  }, [selectedItemKey, marketplace, mode]);
+  }, [selectedItemKey, marketplace, mode, freeShipping]);
 
   const selectedItem = selectedItemKey.startsWith('kit_')
     ? kits.find(k => `kit_${k.id}` === selectedItemKey)
@@ -225,6 +227,26 @@ export default function SimulatorPage() {
                   />
                 </div>
               </div>
+
+              {/* Free Shipping Volunteer Toggle */}
+              {marketplace.startsWith('mercado_livre') && (
+                <div className="pt-2 border-t border-slate-100 dark:border-slate-900">
+                  <label className="flex items-start space-x-3 text-sm text-slate-700 dark:text-slate-350 font-semibold cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={freeShipping}
+                      onChange={(e) => setFreeShipping(e.target.checked)}
+                      className="rounded border-slate-700 bg-slate-950 text-emerald-500 focus:ring-emerald-500 w-4 h-4 mt-0.5"
+                    />
+                    <div>
+                      <span className="block text-slate-900 dark:text-slate-200">Oferecer Frete Grátis Voluntário</span>
+                      <span className="text-[10px] text-slate-500 dark:text-slate-450 block font-normal mt-0.5">
+                        Aplica frete grátis subsidiado mesmo para preços abaixo de R$ 79,00
+                      </span>
+                    </div>
+                  </label>
+                </div>
+              )}
 
               {/* Advanced Shipping Override */}
               <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-900">

@@ -80,7 +80,10 @@ async def simulate_pricing_engine(sheets_db, request: SimulatorRequest) -> Simul
             shipping_cost_under = request.shipping_override
         else:
             shipping_cost_over = subsidized_shipping
-            shipping_cost_under = 0.0 # Under 79, buyer pays
+            if getattr(request, "free_shipping", False):
+                shipping_cost_under = subsidized_shipping
+            else:
+                shipping_cost_under = 0.0 # Under 79, buyer pays
             
         def eval_ml_price(p: float):
             p = max(p, 0.01)

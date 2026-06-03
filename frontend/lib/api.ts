@@ -98,6 +98,7 @@ export const api = {
     input_value: number;
     shipping_override?: number;
     is_kit?: boolean;
+    free_shipping?: boolean;
   }) => request<any>('/api/simulations/simulate', {
     method: 'POST',
     body: JSON.stringify(data),
@@ -108,6 +109,7 @@ export const api = {
     reference_price?: number;
     shipping_override?: number;
     is_kit?: boolean;
+    free_shipping?: boolean;
   }) => request<any>('/api/simulations/compare', {
     method: 'POST',
     body: JSON.stringify(data),

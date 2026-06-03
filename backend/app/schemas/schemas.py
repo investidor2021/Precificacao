@@ -149,6 +149,7 @@ class SimulatorRequest(BaseModel):
     reputation_good: Optional[bool] = True
     shipping_override: Optional[float] = None
     is_kit: Optional[bool] = False
+    free_shipping: Optional[bool] = False
 
 class SimulatorResult(BaseModel):
     price: float
