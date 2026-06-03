@@ -20,6 +20,30 @@ export default function SettingsPage() {
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
+  const [mlForm, setMlForm] = useState({
+    classic_commission_rate: '',
+    premium_commission_rate: '',
+    fixed_fee: '',
+    fixed_fee_threshold: '',
+    tax_rate: '',
+    shipping_subsidy_rate: ''
+  });
+
+  const [shopeeForm, setShopeeForm] = useState({
+    commission_rate: '',
+    transaction_fee_rate: '',
+    service_fee_rate: '',
+    tax_rate: '',
+    has_free_shipping_program: true,
+    has_cashback_program: false
+  });
+
+  const parseFormFloat = (val: string | number) => {
+    if (typeof val === 'number') return val;
+    if (!val) return 0;
+    return parseFloat(val.replace(',', '.')) || 0;
+  };
+
   useEffect(() => {
     loadConfigs();
   }, []);
@@ -34,6 +58,24 @@ export default function SettingsPage() {
       ]);
       setMlConfig(mlRes);
       setShopeeConfig(shopeeRes);
+
+      setMlForm({
+        classic_commission_rate: mlRes.classic_commission_rate.toString(),
+        premium_commission_rate: mlRes.premium_commission_rate.toString(),
+        fixed_fee: mlRes.fixed_fee.toString(),
+        fixed_fee_threshold: mlRes.fixed_fee_threshold.toString(),
+        tax_rate: mlRes.tax_rate.toString(),
+        shipping_subsidy_rate: mlRes.shipping_subsidy_rate.toString()
+      });
+
+      setShopeeForm({
+        commission_rate: shopeeRes.commission_rate.toString(),
+        transaction_fee_rate: shopeeRes.transaction_fee_rate.toString(),
+        service_fee_rate: shopeeRes.service_fee_rate.toString(),
+        tax_rate: shopeeRes.tax_rate.toString(),
+        has_free_shipping_program: shopeeRes.has_free_shipping_program,
+        has_cashback_program: shopeeRes.has_cashback_program
+      });
     } catch (err: any) {
       console.error(err);
       setError('Erro ao carregar configurações de taxas.');
@@ -48,7 +90,17 @@ export default function SettingsPage() {
     setError(null);
     setSuccessMsg(null);
     try {
-      await api.updateMLConfig(mlConfig);
+      const payload = {
+        ...mlConfig,
+        classic_commission_rate: parseFormFloat(mlForm.classic_commission_rate),
+        premium_commission_rate: parseFormFloat(mlForm.premium_commission_rate),
+        fixed_fee: parseFormFloat(mlForm.fixed_fee),
+        fixed_fee_threshold: parseFormFloat(mlForm.fixed_fee_threshold),
+        tax_rate: parseFormFloat(mlForm.tax_rate),
+        shipping_subsidy_rate: parseFormFloat(mlForm.shipping_subsidy_rate)
+      };
+      await api.updateMLConfig(payload);
+      setMlConfig(payload);
       setSuccessMsg('Configurações do Mercado Livre salvas com sucesso!');
       setTimeout(() => setSuccessMsg(null), 3000);
     } catch (err: any) {
@@ -62,7 +114,17 @@ export default function SettingsPage() {
     setError(null);
     setSuccessMsg(null);
     try {
-      await api.updateShopeeConfig(shopeeConfig);
+      const payload = {
+        ...shopeeConfig,
+        commission_rate: parseFormFloat(shopeeForm.commission_rate),
+        transaction_fee_rate: parseFormFloat(shopeeForm.transaction_fee_rate),
+        service_fee_rate: parseFormFloat(shopeeForm.service_fee_rate),
+        tax_rate: parseFormFloat(shopeeForm.tax_rate),
+        has_free_shipping_program: shopeeForm.has_free_shipping_program,
+        has_cashback_program: shopeeForm.has_cashback_program
+      };
+      await api.updateShopeeConfig(payload);
+      setShopeeConfig(payload);
       setSuccessMsg('Configurações da Shopee salvas com sucesso!');
       setTimeout(() => setSuccessMsg(null), 3000);
     } catch (err: any) {
@@ -122,18 +184,18 @@ export default function SettingsPage() {
                 <div className="space-y-1">
                   <label className="text-xs text-slate-400 font-bold uppercase">Comissão Clássico (%)</label>
                   <input
-                    type="number" step="0.1" required
-                    value={mlConfig.classic_commission_rate}
-                    onChange={(e) => setMlConfig({ ...mlConfig, classic_commission_rate: parseFloat(e.target.value) || 0 })}
+                    type="text" required
+                    value={mlForm.classic_commission_rate}
+                    onChange={(e) => setMlForm({ ...mlForm, classic_commission_rate: e.target.value })}
                     className="w-full px-3 py-2 bg-transparent border border-slate-200 dark:border-slate-800 rounded-lg text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   />
                 </div>
                 <div className="space-y-1">
                   <label className="text-xs text-slate-400 font-bold uppercase">Comissão Premium (%)</label>
                   <input
-                    type="number" step="0.1" required
-                    value={mlConfig.premium_commission_rate}
-                    onChange={(e) => setMlConfig({ ...mlConfig, premium_commission_rate: parseFloat(e.target.value) || 0 })}
+                    type="text" required
+                    value={mlForm.premium_commission_rate}
+                    onChange={(e) => setMlForm({ ...mlForm, premium_commission_rate: e.target.value })}
                     className="w-full px-3 py-2 bg-transparent border border-slate-200 dark:border-slate-800 rounded-lg text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   />
                 </div>
@@ -143,18 +205,18 @@ export default function SettingsPage() {
                 <div className="space-y-1">
                   <label className="text-xs text-slate-400 font-bold uppercase">Taxa Fixa Under Threshold (R$)</label>
                   <input
-                    type="number" step="0.01" required
-                    value={mlConfig.fixed_fee}
-                    onChange={(e) => setMlConfig({ ...mlConfig, fixed_fee: parseFloat(e.target.value) || 0 })}
+                    type="text" required
+                    value={mlForm.fixed_fee}
+                    onChange={(e) => setMlForm({ ...mlForm, fixed_fee: e.target.value })}
                     className="w-full px-3 py-2 bg-transparent border border-slate-200 dark:border-slate-800 rounded-lg text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   />
                 </div>
                 <div className="space-y-1">
                   <label className="text-xs text-slate-400 font-bold uppercase">Limite Frete Grátis (R$)</label>
                   <input
-                    type="number" step="1" required
-                    value={mlConfig.fixed_fee_threshold}
-                    onChange={(e) => setMlConfig({ ...mlConfig, fixed_fee_threshold: parseFloat(e.target.value) || 0 })}
+                    type="text" required
+                    value={mlForm.fixed_fee_threshold}
+                    onChange={(e) => setMlForm({ ...mlForm, fixed_fee_threshold: e.target.value })}
                     className="w-full px-3 py-2 bg-transparent border border-slate-200 dark:border-slate-800 rounded-lg text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   />
                 </div>
@@ -164,18 +226,18 @@ export default function SettingsPage() {
                 <div className="space-y-1">
                   <label className="text-xs text-slate-400 font-bold uppercase">Imposto Simples (%)</label>
                   <input
-                    type="number" step="0.1" required
-                    value={mlConfig.tax_rate}
-                    onChange={(e) => setMlConfig({ ...mlConfig, tax_rate: parseFloat(e.target.value) || 0 })}
+                    type="text" required
+                    value={mlForm.tax_rate}
+                    onChange={(e) => setMlForm({ ...mlForm, tax_rate: e.target.value })}
                     className="w-full px-3 py-2 bg-transparent border border-slate-200 dark:border-slate-800 rounded-lg text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   />
                 </div>
                 <div className="space-y-1">
                   <label className="text-xs text-slate-400 font-bold uppercase">Subsídio Frete (%)</label>
                   <input
-                    type="number" step="1" max="100" min="0" required
-                    value={mlConfig.shipping_subsidy_rate}
-                    onChange={(e) => setMlConfig({ ...mlConfig, shipping_subsidy_rate: parseFloat(e.target.value) || 0 })}
+                    type="text" required
+                    value={mlForm.shipping_subsidy_rate}
+                    onChange={(e) => setMlForm({ ...mlForm, shipping_subsidy_rate: e.target.value })}
                     className="w-full px-3 py-2 bg-transparent border border-slate-200 dark:border-slate-800 rounded-lg text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   />
                 </div>
@@ -207,18 +269,18 @@ export default function SettingsPage() {
                 <div className="space-y-1">
                   <label className="text-xs text-slate-400 font-bold uppercase">Comissão Base (%)</label>
                   <input
-                    type="number" step="0.1" required
-                    value={shopeeConfig.commission_rate}
-                    onChange={(e) => setShopeeConfig({ ...shopeeConfig, commission_rate: parseFloat(e.target.value) || 0 })}
+                    type="text" required
+                    value={shopeeForm.commission_rate}
+                    onChange={(e) => setShopeeForm({ ...shopeeForm, commission_rate: e.target.value })}
                     className="w-full px-3 py-2 bg-transparent border border-slate-200 dark:border-slate-800 rounded-lg text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   />
                 </div>
                 <div className="space-y-1">
                   <label className="text-xs text-slate-400 font-bold uppercase">Taxa de Transação (%)</label>
                   <input
-                    type="number" step="0.1" required
-                    value={shopeeConfig.transaction_fee_rate}
-                    onChange={(e) => setShopeeConfig({ ...shopeeConfig, transaction_fee_rate: parseFloat(e.target.value) || 0 })}
+                    type="text" required
+                    value={shopeeForm.transaction_fee_rate}
+                    onChange={(e) => setShopeeForm({ ...shopeeForm, transaction_fee_rate: e.target.value })}
                     className="w-full px-3 py-2 bg-transparent border border-slate-200 dark:border-slate-800 rounded-lg text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   />
                 </div>
@@ -228,18 +290,18 @@ export default function SettingsPage() {
                 <div className="space-y-1">
                   <label className="text-xs text-slate-400 font-bold uppercase">Taxa de Serviço (%)</label>
                   <input
-                    type="number" step="0.1" required
-                    value={shopeeConfig.service_fee_rate}
-                    onChange={(e) => setShopeeConfig({ ...shopeeConfig, service_fee_rate: parseFloat(e.target.value) || 0 })}
+                    type="text" required
+                    value={shopeeForm.service_fee_rate}
+                    onChange={(e) => setShopeeForm({ ...shopeeForm, service_fee_rate: e.target.value })}
                     className="w-full px-3 py-2 bg-transparent border border-slate-200 dark:border-slate-800 rounded-lg text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   />
                 </div>
                 <div className="space-y-1">
                   <label className="text-xs text-slate-400 font-bold uppercase">Imposto Simples (%)</label>
                   <input
-                    type="number" step="0.1" required
-                    value={shopeeConfig.tax_rate}
-                    onChange={(e) => setShopeeConfig({ ...shopeeConfig, tax_rate: parseFloat(e.target.value) || 0 })}
+                    type="text" required
+                    value={shopeeForm.tax_rate}
+                    onChange={(e) => setShopeeForm({ ...shopeeForm, tax_rate: e.target.value })}
                     className="w-full px-3 py-2 bg-transparent border border-slate-200 dark:border-slate-800 rounded-lg text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   />
                 </div>
@@ -250,8 +312,8 @@ export default function SettingsPage() {
                 <label className="flex items-center space-x-3 text-sm text-slate-700 dark:text-slate-300 font-semibold cursor-pointer">
                   <input
                     type="checkbox"
-                    checked={shopeeConfig.has_free_shipping_program}
-                    onChange={(e) => setShopeeConfig({ ...shopeeConfig, has_free_shipping_program: e.target.checked })}
+                    checked={shopeeForm.has_free_shipping_program}
+                    onChange={(e) => setShopeeForm({ ...shopeeForm, has_free_shipping_program: e.target.checked })}
                     className="rounded border-slate-700 bg-slate-950 text-emerald-500 focus:ring-emerald-500 w-4 h-4"
                   />
                   <span>Participa do Programa de Frete Grátis (+6% taxa)</span>
@@ -260,8 +322,8 @@ export default function SettingsPage() {
                 <label className="flex items-center space-x-3 text-sm text-slate-700 dark:text-slate-300 font-semibold cursor-pointer">
                   <input
                     type="checkbox"
-                    checked={shopeeConfig.has_cashback_program}
-                    onChange={(e) => setShopeeConfig({ ...shopeeConfig, has_cashback_program: e.target.checked })}
+                    checked={shopeeForm.has_cashback_program}
+                    onChange={(e) => setShopeeForm({ ...shopeeForm, has_cashback_program: e.target.checked })}
                     className="rounded border-slate-700 bg-slate-950 text-emerald-500 focus:ring-emerald-500 w-4 h-4"
                   />
                   <span>Participa do Programa de Moedas / Cashback</span>

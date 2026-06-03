@@ -18,7 +18,7 @@ import { Product, ComparatorResponse } from '@/types';
 export default function ComparePage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [selectedProductId, setSelectedProductId] = useState<string>('');
-  const [referencePrice, setReferencePrice] = useState<number>(0);
+  const [referencePrice, setReferencePrice] = useState<string>('');
   const [shippingOverride, setShippingOverride] = useState<string>('');
 
   const [compareData, setCompareData] = useState<ComparatorResponse | null>(null);
@@ -41,6 +41,12 @@ export default function ComparePage() {
     }
   };
 
+  const parseFormFloat = (val: string | number) => {
+    if (typeof val === 'number') return val;
+    if (!val) return 0;
+    return parseFloat(val.replace(',', '.')) || 0;
+  };
+
   // Run comparator
   const handleCompare = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -49,10 +55,11 @@ export default function ComparePage() {
     setLoading(true);
     setError(null);
     try {
-      const overrideVal = shippingOverride !== '' ? parseFloat(shippingOverride) : undefined;
+      const refPriceVal = referencePrice !== '' ? parseFormFloat(referencePrice) : undefined;
+      const overrideVal = shippingOverride !== '' ? parseFormFloat(shippingOverride) : undefined;
       const res = await api.compare({
         product_id: parseInt(selectedProductId),
-        reference_price: referencePrice > 0 ? referencePrice : undefined,
+        reference_price: refPriceVal && refPriceVal > 0 ? refPriceVal : undefined,
         shipping_override: overrideVal
       });
       setCompareData(res);
@@ -69,7 +76,7 @@ export default function ComparePage() {
   useEffect(() => {
     if (selectedProductId) {
       // Reset custom reference price to let backend decide standard 1.5x cost, or manually fill if needed
-      setReferencePrice(0);
+      setReferencePrice('');
       handleCompare();
     }
   }, [selectedProductId]);
@@ -120,10 +127,10 @@ export default function ComparePage() {
                 <div className="relative">
                   <span className="absolute left-3 top-2.5 text-slate-500 text-sm font-semibold">R$</span>
                   <input
-                    type="number" step="0.01" min="0"
-                    placeholder={selectedProduct ? `Padrão: R$ ${(selectedProduct.unit_cost * 1.5).toFixed(2)}` : '0.00'}
-                    value={referencePrice || ''}
-                    onChange={(e) => setReferencePrice(parseFloat(e.target.value) || 0)}
+                    type="text"
+                    placeholder={selectedProduct ? `Padrão: R$ ${(selectedProduct.unit_cost * 1.5).toFixed(2)}` : '0,00'}
+                    value={referencePrice}
+                    onChange={(e) => setReferencePrice(e.target.value)}
                     className="w-full pl-9 pr-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-800 dark:text-slate-200"
                   />
                 </div>
@@ -134,7 +141,7 @@ export default function ComparePage() {
                 <div className="relative">
                   <span className="absolute left-3 top-2.5 text-slate-500 text-sm font-semibold">R$</span>
                   <input
-                    type="number" step="0.01" min="0"
+                    type="text"
                     placeholder="Padrão do canal"
                     value={shippingOverride}
                     onChange={(e) => setShippingOverride(e.target.value)}

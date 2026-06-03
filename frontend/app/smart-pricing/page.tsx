@@ -23,7 +23,7 @@ export default function SmartPricingPage() {
   // Selection Mode
   const [isManualCost, setIsManualCost] = useState(false);
   const [selectedProductId, setSelectedProductId] = useState<string>('');
-  const [customCost, setCustomCost] = useState<number>(0);
+  const [customCost, setCustomCost] = useState<string>('');
   const [category, setCategory] = useState<string>('Eletrônicos');
   
   // Competitors tags list
@@ -51,7 +51,7 @@ export default function SmartPricingPage() {
   };
 
   const addCompetitorPrice = () => {
-    const val = parseFloat(competitorInput);
+    const val = parseFloat(competitorInput.replace(',', '.'));
     if (!isNaN(val) && val > 0) {
       setCompetitors([...competitors, val]);
       setCompetitorInput('');
@@ -62,6 +62,12 @@ export default function SmartPricingPage() {
     setCompetitors(competitors.filter((_, i) => i !== index));
   };
 
+  const parseFormFloat = (val: string | number) => {
+    if (typeof val === 'number') return val;
+    if (!val) return 0;
+    return parseFloat(val.replace(',', '.')) || 0;
+  };
+
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -69,7 +75,7 @@ export default function SmartPricingPage() {
     try {
       const payload = {
         product_id: isManualCost ? undefined : parseInt(selectedProductId),
-        custom_cost: isManualCost ? customCost : undefined,
+        custom_cost: isManualCost ? parseFormFloat(customCost) : undefined,
         category,
         competitors
       };
@@ -140,11 +146,11 @@ export default function SmartPricingPage() {
                 <div className="relative">
                   <span className="absolute left-3 top-2.5 text-slate-500 text-sm font-semibold">R$</span>
                   <input
-                    type="number" step="0.01" min="0.01" required
-                    value={customCost || ''}
-                    onChange={(e) => setCustomCost(parseFloat(e.target.value) || 0)}
+                    type="text" required
+                    value={customCost}
+                    onChange={(e) => setCustomCost(e.target.value)}
                     className="w-full pl-9 pr-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-800 dark:text-slate-200"
-                    placeholder="0.00"
+                    placeholder="0,00"
                   />
                 </div>
               )}
@@ -170,7 +176,7 @@ export default function SmartPricingPage() {
                 <div className="relative flex-1">
                   <span className="absolute left-3 top-2.5 text-slate-500 text-sm font-semibold">R$</span>
                   <input
-                    type="number" step="0.01" min="0"
+                    type="text"
                     value={competitorInput}
                     onChange={(e) => setCompetitorInput(e.target.value)}
                     onKeyDown={(e) => {
@@ -180,7 +186,7 @@ export default function SmartPricingPage() {
                       }
                     }}
                     className="w-full pl-9 pr-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-800 dark:text-slate-200"
-                    placeholder="0.00"
+                    placeholder="0,00"
                   />
                 </div>
                 <button

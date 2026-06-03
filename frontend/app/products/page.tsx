@@ -39,20 +39,32 @@ export default function ProductsPage() {
 
   // Form states
   const [productForm, setProductForm] = useState({
-    sku: '', name: '', category: '', purchase_cost: 0, quantity_acquired: 1,
-    weight: 0, height: 0, width: 0, length: 0
+    sku: '', name: '', category: '', purchase_cost: '', quantity_acquired: '1',
+    weight: '', height: '', width: '', length: ''
   });
   
   const [pkgForm, setPkgForm] = useState({
-    name: '', cost: 0, type: 'box'
+    name: '', cost: '', type: 'box'
   });
   
   const [opForm, setOpForm] = useState({
-    name: '', amount: 0, type: 'fixed'
+    name: '', amount: '', type: 'fixed'
   });
 
+  const parseFormFloat = (val: string | number) => {
+    if (typeof val === 'number') return val;
+    if (!val) return 0;
+    return parseFloat(val.replace(',', '.')) || 0;
+  };
+
+  const parseFormInt = (val: string | number) => {
+    if (typeof val === 'number') return val;
+    if (!val) return 0;
+    return parseInt(val) || 0;
+  };
+
   // Calculate cubic weight reactively
-  const currentCubicWeight = (productForm.height * productForm.width * productForm.length) / 6000;
+  const currentCubicWeight = (parseFormFloat(productForm.height) * parseFormFloat(productForm.width) * parseFormFloat(productForm.length)) / 6000;
 
   useEffect(() => {
     loadAllData();
@@ -116,8 +128,8 @@ export default function ProductsPage() {
   // --- Form resetting ---
   const resetProductForm = () => {
     setProductForm({
-      sku: '', name: '', category: '', purchase_cost: 0, quantity_acquired: 1,
-      weight: 0, height: 0, width: 0, length: 0
+      sku: '', name: '', category: '', purchase_cost: '', quantity_acquired: '1',
+      weight: '', height: '', width: '', length: ''
     });
     setIsEditing(false);
     setEditingProductId(null);
@@ -134,12 +146,12 @@ export default function ProductsPage() {
       sku: product.sku,
       name: product.name,
       category: product.category || '',
-      purchase_cost: product.purchase_cost,
-      quantity_acquired: product.quantity_acquired,
-      weight: product.weight,
-      height: product.height,
-      width: product.width,
-      length: product.length
+      purchase_cost: product.purchase_cost.toString(),
+      quantity_acquired: product.quantity_acquired.toString(),
+      weight: product.weight.toString(),
+      height: product.height.toString(),
+      width: product.width.toString(),
+      length: product.length.toString()
     });
     setEditingProductId(product.id);
     setIsEditing(true);
@@ -150,11 +162,23 @@ export default function ProductsPage() {
   const handleProductFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      const payload = {
+        sku: productForm.sku,
+        name: productForm.name,
+        category: productForm.category,
+        purchase_cost: parseFormFloat(productForm.purchase_cost),
+        quantity_acquired: parseFormInt(productForm.quantity_acquired) || 1,
+        weight: parseFormFloat(productForm.weight),
+        height: parseFormFloat(productForm.height),
+        width: parseFormFloat(productForm.width),
+        length: parseFormFloat(productForm.length)
+      };
+
       if (isEditing && editingProductId !== null) {
-        const res = await api.updateProduct(editingProductId, productForm);
+        const res = await api.updateProduct(editingProductId, payload);
         setProducts(products.map(p => p.id === editingProductId ? res : p));
       } else {
-        const res = await api.createProduct(productForm);
+        const res = await api.createProduct(payload);
         setProducts([res, ...products]);
       }
       setShowProductModal(false);
@@ -167,10 +191,15 @@ export default function ProductsPage() {
   const handleCreatePkg = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const res = await api.createPackaging(pkgForm);
+      const payload = {
+        name: pkgForm.name,
+        cost: parseFormFloat(pkgForm.cost),
+        type: pkgForm.type
+      };
+      const res = await api.createPackaging(payload);
       setPackaging([...packaging, res]);
       setShowPkgModal(false);
-      setPkgForm({ name: '', cost: 0, type: 'box' });
+      setPkgForm({ name: '', cost: '', type: 'box' });
       const prodRes = await api.getProducts();
       setProducts(prodRes);
     } catch (err: any) {
@@ -181,10 +210,15 @@ export default function ProductsPage() {
   const handleCreateOp = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const res = await api.createOperational(opForm);
+      const payload = {
+        name: opForm.name,
+        amount: parseFormFloat(opForm.amount),
+        type: opForm.type
+      };
+      const res = await api.createOperational(payload);
       setOperational([...operational, res]);
       setShowOpModal(false);
-      setOpForm({ name: '', amount: 0, type: 'fixed' });
+      setOpForm({ name: '', amount: '', type: 'fixed' });
       const prodRes = await api.getProducts();
       setProducts(prodRes);
     } catch (err: any) {
@@ -485,18 +519,18 @@ export default function ProductsPage() {
                   <div className="space-y-1">
                     <label className="text-xs text-slate-400 font-bold uppercase">Custo Compra (R$)</label>
                     <input
-                      type="number" step="0.01" min="0" required
-                      value={productForm.purchase_cost || ''}
-                      onChange={(e) => setProductForm({ ...productForm, purchase_cost: parseFloat(e.target.value) || 0 })}
+                      type="text" required placeholder="Ex: 10,50"
+                      value={productForm.purchase_cost}
+                      onChange={(e) => setProductForm({ ...productForm, purchase_cost: e.target.value })}
                       className="w-full px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
                     />
                   </div>
                   <div className="space-y-1">
                     <label className="text-xs text-slate-400 font-bold uppercase">Qtd. Adquirida</label>
                     <input
-                      type="number" min="1" required
-                      value={productForm.quantity_acquired || ''}
-                      onChange={(e) => setProductForm({ ...productForm, quantity_acquired: parseInt(e.target.value) || 1 })}
+                      type="text" required placeholder="Ex: 1"
+                      value={productForm.quantity_acquired}
+                      onChange={(e) => setProductForm({ ...productForm, quantity_acquired: e.target.value })}
                       className="w-full px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
                     />
                   </div>
@@ -509,36 +543,36 @@ export default function ProductsPage() {
                   <div className="space-y-1">
                     <label className="text-xs text-slate-400 font-bold uppercase">Peso (kg)</label>
                     <input
-                      type="text" required placeholder="Ex: 0.20"
+                      type="text" required placeholder="Ex: 0,20"
                       value={productForm.weight}
-                      onChange={(e) => setProductForm({ ...productForm, weight: parseFloat(e.target.value.replace(",", ".")) || 0 })}
+                      onChange={(e) => setProductForm({ ...productForm, weight: e.target.value })}
                       className="w-full px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
                     />
                   </div>
                   <div className="space-y-1">
                     <label className="text-xs text-slate-400 font-bold uppercase">Comprimento (cm)</label>
                     <input
-                      type="text" required placeholder="Ex: 14.2"
+                      type="text" required placeholder="Ex: 14,2"
                       value={productForm.length}
-                      onChange={(e) => setProductForm({ ...productForm, length: parseFloat(e.target.value.replace(",", ".")) || 0 })}
+                      onChange={(e) => setProductForm({ ...productForm, length: e.target.value })}
                       className="w-full px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
                     />
                   </div>
                   <div className="space-y-1">
                     <label className="text-xs text-slate-400 font-bold uppercase">Largura (cm)</label>
                     <input
-                      type="text" required placeholder="Ex: 11.8"
+                      type="text" required placeholder="Ex: 11,8"
                       value={productForm.width}
-                      onChange={(e) => setProductForm({ ...productForm, width: parseFloat(e.target.value.replace(",", ".")) || 0 })}
+                      onChange={(e) => setProductForm({ ...productForm, width: e.target.value })}
                       className="w-full px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
                     />
                   </div>
                   <div className="space-y-1">
                     <label className="text-xs text-slate-400 font-bold uppercase">Altura (cm)</label>
                     <input
-                      type="text" required placeholder="Ex: 2.3"
+                      type="text" required placeholder="Ex: 2,3"
                       value={productForm.height}
-                      onChange={(e) => setProductForm({ ...productForm, height: parseFloat(e.target.value.replace(",", ".")) || 0 })}
+                      onChange={(e) => setProductForm({ ...productForm, height: e.target.value })}
                       className="w-full px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
                     />
                   </div>
@@ -594,9 +628,9 @@ export default function ProductsPage() {
               <div className="space-y-1">
                 <label className="text-xs text-slate-400 font-bold uppercase">Custo Unitário (R$)</label>
                 <input
-                  type="number" step="0.01" min="0" required
-                  value={pkgForm.cost || ''}
-                  onChange={(e) => setPkgForm({ ...pkgForm, cost: parseFloat(e.target.value) || 0 })}
+                  type="text" required placeholder="Ex: 1,50"
+                  value={pkgForm.cost}
+                  onChange={(e) => setPkgForm({ ...pkgForm, cost: e.target.value })}
                   className="w-full px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 />
               </div>
@@ -658,9 +692,9 @@ export default function ProductsPage() {
               <div className="space-y-1">
                 <label className="text-xs text-slate-400 font-bold uppercase">Valor (R$)</label>
                 <input
-                  type="number" step="0.01" min="0" required
-                  value={opForm.amount || ''}
-                  onChange={(e) => setOpForm({ ...opForm, amount: parseFloat(e.target.value) || 0 })}
+                  type="text" required placeholder="Ex: 150,00"
+                  value={opForm.amount}
+                  onChange={(e) => setOpForm({ ...opForm, amount: e.target.value })}
                   className="w-full px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 />
               </div>

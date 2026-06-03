@@ -21,7 +21,7 @@ export default function SimulatorPage() {
   const [selectedProductId, setSelectedProductId] = useState<string>('');
   const [marketplace, setMarketplace] = useState<string>('mercado_livre_classic');
   const [mode, setMode] = useState<number>(1); // 1 = Price, 2 = Margin, 3 = Profit
-  const [inputValue, setInputValue] = useState<number>(0);
+  const [inputValue, setInputValue] = useState<string>('');
   const [shippingOverride, setShippingOverride] = useState<string>('');
   
   const [result, setResult] = useState<SimulatorResult | null>(null);
@@ -44,6 +44,12 @@ export default function SimulatorPage() {
     }
   };
 
+  const parseFormFloat = (val: string | number) => {
+    if (typeof val === 'number') return val;
+    if (!val) return 0;
+    return parseFloat(val.replace(',', '.')) || 0;
+  };
+
   // Run calculation
   const handleCalculate = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -52,12 +58,12 @@ export default function SimulatorPage() {
     setLoading(true);
     setError(null);
     try {
-      const overrideVal = shippingOverride !== '' ? parseFloat(shippingOverride) : undefined;
+      const overrideVal = shippingOverride !== '' ? parseFormFloat(shippingOverride) : undefined;
       const res = await api.simulate({
         product_id: parseInt(selectedProductId),
         marketplace,
         mode,
-        input_value: inputValue,
+        input_value: parseFormFloat(inputValue),
         shipping_override: overrideVal
       });
       setResult(res);
@@ -72,7 +78,7 @@ export default function SimulatorPage() {
 
   // Trigger calculation when selectors change to make it feel alive!
   useEffect(() => {
-    if (selectedProductId && inputValue > 0) {
+    if (selectedProductId && parseFormFloat(inputValue) > 0) {
       handleCalculate();
     }
   }, [selectedProductId, marketplace, mode]);
@@ -165,7 +171,7 @@ export default function SimulatorPage() {
                   ].map((m) => (
                     <button
                       key={m.modeNum} type="button"
-                      onClick={() => { setMode(m.modeNum); setInputValue(0); }}
+                      onClick={() => { setMode(m.modeNum); setInputValue(''); }}
                       className={`flex-1 py-1.5 rounded-md text-[10px] sm:text-xs font-semibold transition ${
                         mode === m.modeNum
                           ? 'bg-white dark:bg-slate-800 text-slate-800 dark:text-white shadow-sm'
@@ -190,11 +196,11 @@ export default function SimulatorPage() {
                     {mode === 2 ? '%' : 'R$'}
                   </span>
                   <input
-                    type="number" step="0.01" min="0" required
-                    value={inputValue || ''}
-                    onChange={(e) => setInputValue(parseFloat(e.target.value) || 0)}
-                    className="w-full pl-9 pr-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                    placeholder="0.00"
+                    type="text" required
+                    value={inputValue}
+                    onChange={(e) => setInputValue(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-850 bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    placeholder="0,00"
                   />
                 </div>
               </div>
@@ -209,11 +215,11 @@ export default function SimulatorPage() {
                 <div className="relative">
                   <span className="absolute left-3 top-2.5 text-slate-500 text-sm font-semibold">R$</span>
                   <input
-                    type="number" step="0.01" min="0"
+                    type="text"
                     placeholder="Padrão calculado"
                     value={shippingOverride}
                     onChange={(e) => setShippingOverride(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="w-full pl-9 pr-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-850 bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   />
                 </div>
               </div>
