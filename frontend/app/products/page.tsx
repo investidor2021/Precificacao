@@ -33,6 +33,7 @@ export default function ProductsPage() {
   // Modals state
   const [showProductModal, setShowProductModal] = useState(false);
   const [showKitModal, setShowKitModal] = useState(false);
+  const [kitSearchQuery, setKitSearchQuery] = useState('');
   const [showPkgModal, setShowPkgModal] = useState(false);
   const [showOpModal, setShowOpModal] = useState(false);
 
@@ -213,6 +214,7 @@ export default function ProductsPage() {
       sku: '', name: '', category: '', weight: '', height: '', width: '', length: '',
       items: []
     });
+    setKitSearchQuery('');
   };
 
   const handleAddKitItem = () => {
@@ -970,61 +972,139 @@ export default function ProductsPage() {
                 </div>
               </div>
 
-              {/* Dynamic Items list */}
+              {/* Products list for Kit */}
               <div className="border-t border-slate-200 dark:border-slate-900 pt-6 space-y-4">
-                <div className="flex justify-between items-center">
-                  <h4 className="text-sm font-bold dark:text-white uppercase tracking-wider">Produtos do Kit</h4>
-                  <button
-                    type="button"
-                    onClick={handleAddKitItem}
-                    className="flex items-center space-x-1.5 px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-xs font-semibold transition"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Adicionar Produto</span>
-                  </button>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <h4 className="text-sm font-bold dark:text-white uppercase tracking-wider">Produtos Selecionados para o Kit</h4>
+                  
+                  {/* Search box inside modal */}
+                  <div className="w-full sm:w-64">
+                    <input
+                      type="text"
+                      placeholder="Buscar por nome ou SKU..."
+                      value={kitSearchQuery}
+                      onChange={(e) => setKitSearchQuery(e.target.value)}
+                      className="w-full px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-transparent text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    />
+                  </div>
                 </div>
 
-                {kitForm.items.length === 0 ? (
+                {products.length === 0 ? (
                   <div className="text-center py-6 border border-dashed border-slate-200 dark:border-slate-850 rounded-xl text-slate-500 text-xs">
-                    Nenhum produto adicionado. Clique no botão acima para montar o kit.
+                    Nenhum produto unitário cadastrado no estoque para montar o kit.
                   </div>
                 ) : (
-                  <div className="space-y-3">
-                    {kitForm.items.map((item, idx) => (
-                      <div key={idx} className="flex items-center space-x-3 bg-slate-50 dark:bg-slate-900/40 p-3 rounded-xl border border-slate-200 dark:border-slate-850">
-                        <div className="flex-1 space-y-1">
-                          <label className="text-[10px] text-slate-400 font-bold uppercase">Produto</label>
-                          <select
-                            value={item.product_id}
-                            onChange={(e) => handleKitItemChange(idx, 'product_id', parseInt(e.target.value))}
-                            className="w-full px-2 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-800 dark:text-slate-200"
+                  <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1 border border-slate-200 dark:border-slate-850 rounded-xl p-3 bg-slate-50/50 dark:bg-slate-950/20">
+                    {products
+                      .filter(p => 
+                        p.name.toLowerCase().includes(kitSearchQuery.toLowerCase()) || 
+                        p.sku.toLowerCase().includes(kitSearchQuery.toLowerCase())
+                      )
+                      .map((p) => {
+                        const kitItem = kitForm.items.find(item => item.product_id === p.id);
+                        const qty = kitItem ? kitItem.quantity : 0;
+                        
+                        return (
+                          <div 
+                            key={p.id} 
+                            className={`flex items-center justify-between p-3 rounded-xl border transition ${
+                              qty > 0 
+                                ? 'border-emerald-500/80 bg-emerald-500/5' 
+                                : 'border-slate-200 dark:border-slate-850/80 hover:border-slate-350 dark:hover:border-slate-750'
+                            }`}
                           >
-                            {products.map(p => (
-                              <option key={p.id} value={p.id}>
-                                {p.sku} — {p.name} (R$ {p.purchase_cost.toFixed(2)})
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                        <div className="w-24 space-y-1">
-                          <label className="text-[10px] text-slate-400 font-bold uppercase">Quantidade</label>
-                          <input
-                            type="number" min="1" required
-                            value={item.quantity}
-                            onChange={(e) => handleKitItemChange(idx, 'quantity', parseInt(e.target.value) || 1)}
-                            className="w-full px-2 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                          />
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveKitItem(idx)}
-                          className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-500/10 rounded-lg mt-5 transition"
-                          title="Remover item"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    ))}
+                            <div className="flex-1 min-w-0 pr-4">
+                              <div className="flex items-center space-x-2">
+                                <span className="text-xs font-mono font-bold text-slate-500">{p.sku}</span>
+                                <span className="text-xs bg-slate-100/80 dark:bg-slate-800/80 px-1.5 py-0.5 rounded text-slate-500 dark:text-slate-400">
+                                  Unit: R$ {p.purchase_cost.toFixed(2)}
+                                </span>
+                              </div>
+                              <h5 className="font-bold text-sm text-slate-800 dark:text-slate-200 truncate mt-0.5">{p.name}</h5>
+                            </div>
+                            
+                            {/* Quantity Controls */}
+                            <div className="flex items-center space-x-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-1">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (qty === 0) return;
+                                  if (qty === 1) {
+                                    setKitForm({
+                                      ...kitForm,
+                                      items: kitForm.items.filter(item => item.product_id !== p.id)
+                                    });
+                                  } else {
+                                    setKitForm({
+                                      ...kitForm,
+                                      items: kitForm.items.map(item => 
+                                        item.product_id === p.id ? { ...item, quantity: qty - 1 } : item
+                                      )
+                                    });
+                                  }
+                                }}
+                                className="w-7 h-7 rounded hover:bg-slate-100 dark:hover:bg-slate-855 flex items-center justify-center text-slate-500 font-bold transition select-none text-sm"
+                              >
+                                -
+                              </button>
+                              
+                              <input
+                                type="number"
+                                min="0"
+                                value={qty}
+                                onChange={(e) => {
+                                  const val = parseInt(e.target.value) || 0;
+                                  if (val <= 0) {
+                                    setKitForm({
+                                      ...kitForm,
+                                      items: kitForm.items.filter(item => item.product_id !== p.id)
+                                    });
+                                  } else {
+                                    const exists = kitForm.items.some(item => item.product_id === p.id);
+                                    if (exists) {
+                                      setKitForm({
+                                        ...kitForm,
+                                        items: kitForm.items.map(item => 
+                                          item.product_id === p.id ? { ...item, quantity: val } : item
+                                        )
+                                      });
+                                    } else {
+                                      setKitForm({
+                                        ...kitForm,
+                                        items: [...kitForm.items, { product_id: p.id, quantity: val }]
+                                      });
+                                    }
+                                  }
+                                }}
+                                className="w-10 text-center bg-transparent border-0 focus:ring-0 text-xs font-bold text-slate-800 dark:text-slate-100 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                              />
+                              
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const exists = kitForm.items.some(item => item.product_id === p.id);
+                                  if (exists) {
+                                    setKitForm({
+                                      ...kitForm,
+                                      items: kitForm.items.map(item => 
+                                        item.product_id === p.id ? { ...item, quantity: qty + 1 } : item
+                                      )
+                                    });
+                                  } else {
+                                    setKitForm({
+                                      ...kitForm,
+                                      items: [...kitForm.items, { product_id: p.id, quantity: 1 }]
+                                    });
+                                  }
+                                }}
+                                className="w-7 h-7 rounded hover:bg-slate-100 dark:hover:bg-slate-855 flex items-center justify-center text-slate-500 font-bold transition select-none text-sm"
+                              >
+                                +
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
                   </div>
                 )}
 
