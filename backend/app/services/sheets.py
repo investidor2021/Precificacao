@@ -120,6 +120,23 @@ class GoogleSheetsService:
                 if not row1:
                     ws.append_row(headers)
 
+        # Seed default packaging if empty
+        try:
+            ws_pkg = self.spreadsheet.worksheet("embalagens")
+            pkg_records = ws_pkg.get_all_records(value_render_option="UNFORMATTED_VALUE")
+            if not pkg_records:
+                default_pkgs = [
+                    [1, "Caixa P (Correios 1) 16x11x6 cm", 1.50, "box"],
+                    [2, "Caixa M (Correios 2) 20x16x7 cm", 2.20, "box"],
+                    [3, "Caixa G (Correios 3) 27x18x9 cm", 2.80, "box"],
+                    [4, "Caixa GG (Correios 4) 30x20x10 cm", 3.50, "box"],
+                    [5, "Envelope Bolha 20x15 cm", 1.00, "envelope"],
+                    [6, "Fita Adesiva / Etiqueta", 0.30, "tape"]
+                ]
+                ws_pkg.append_rows(default_pkgs, value_input_option="RAW")
+        except Exception as e:
+            print(f"Error seeding default packaging: {e}")
+
     def _get_worksheet(self, name: str) -> gspread.Worksheet:
         if not self.spreadsheet:
             self.connect()

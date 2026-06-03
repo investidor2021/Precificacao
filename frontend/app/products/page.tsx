@@ -270,6 +270,38 @@ export default function ProductsPage() {
     }
   };
 
+  const handleAutoCalculateKitLogistics = () => {
+    if (kitForm.items.length === 0) {
+      alert('Adicione pelo menos um produto ao kit para calcular as dimensões.');
+      return;
+    }
+    
+    let totalWeight = 0;
+    let maxHeight = 0;
+    let maxLength = 0;
+    let maxWidth = 0;
+    
+    kitForm.items.forEach(item => {
+      const prod = products.find(p => p.id === item.product_id);
+      if (prod) {
+        totalWeight += prod.weight * item.quantity;
+        // Stack height vertically
+        maxHeight += prod.height * item.quantity;
+        // Bounding box flat dimensions
+        maxLength = Math.max(maxLength, prod.length);
+        maxWidth = Math.max(maxWidth, prod.width);
+      }
+    });
+    
+    setKitForm({
+      ...kitForm,
+      weight: totalWeight.toFixed(3).replace('.', ','),
+      height: maxHeight.toFixed(1).replace('.', ','),
+      width: maxWidth.toFixed(1).replace('.', ','),
+      length: maxLength.toFixed(1).replace('.', ',')
+    });
+  };
+
   const handleCreatePkg = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -1005,7 +1037,16 @@ export default function ProductsPage() {
 
               {/* Kit Logistics */}
               <div className="border-t border-slate-200 dark:border-slate-900 pt-6 space-y-4">
-                <h4 className="text-sm font-bold dark:text-white uppercase tracking-wider">Logística e Embalagem do Kit</h4>
+                <div className="flex justify-between items-center">
+                  <h4 className="text-sm font-bold dark:text-white uppercase tracking-wider">Logística e Embalagem do Kit</h4>
+                  <button
+                    type="button"
+                    onClick={handleAutoCalculateKitLogistics}
+                    className="flex items-center space-x-1.5 px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 dark:text-emerald-400 rounded-lg text-xs font-bold transition"
+                  >
+                    <span>⚡ Autocalcular Logística</span>
+                  </button>
+                </div>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div className="space-y-1">
                     <label className="text-xs text-slate-400 font-bold uppercase">Peso (kg)</label>
