@@ -11,7 +11,11 @@ async def calculate_smart_pricing(sheets_db, request: SmartPricingRequest) -> Sm
     length = 0.0
     
     if request.product_id:
-        product = sheets_db.get_product(request.product_id)
+        if getattr(request, "is_kit", False):
+            product = sheets_db.get_kit(request.product_id)
+        else:
+            product = sheets_db.get_product(request.product_id)
+            
         if product:
             unit_cost = await get_loaded_unit_cost(sheets_db, product)
             weight = product["weight"]

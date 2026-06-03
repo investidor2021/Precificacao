@@ -48,6 +48,16 @@ export const api = {
     method: 'DELETE',
   }),
 
+  // Kits
+  getKits: () => request<any[]>('/api/kits/'),
+  createKit: (data: any) => request<any>('/api/kits/', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }),
+  deleteKit: (id: number) => request<void>(`/api/kits/${id}`, {
+    method: 'DELETE',
+  }),
+
   // Costs (Packaging)
   getPackaging: () => request<any[]>('/api/costs/packaging'),
   createPackaging: (data: any) => request<any>('/api/costs/packaging', {
@@ -87,6 +97,7 @@ export const api = {
     mode: number;
     input_value: number;
     shipping_override?: number;
+    is_kit?: boolean;
   }) => request<any>('/api/simulations/simulate', {
     method: 'POST',
     body: JSON.stringify(data),
@@ -96,6 +107,7 @@ export const api = {
     product_id: number;
     reference_price?: number;
     shipping_override?: number;
+    is_kit?: boolean;
   }) => request<any>('/api/simulations/compare', {
     method: 'POST',
     body: JSON.stringify(data),
@@ -105,6 +117,7 @@ export const api = {
     custom_cost?: number;
     category: string;
     competitors: number[];
+    is_kit?: boolean;
   }) => request<any>('/api/simulations/smart-pricing', {
     method: 'POST',
     body: JSON.stringify(data),

@@ -47,10 +47,14 @@ async def get_ml_shipping_cost(sheets_db, weight: float, height: float, width: f
     return round(matched_fee * (1.0 - discount), 2)
 
 async def simulate_pricing_engine(sheets_db, request: SimulatorRequest) -> SimulatorResult:
-    # 1. Fetch Product
-    product = sheets_db.get_product(request.product_id)
+    # 1. Fetch Product or Kit
+    if getattr(request, "is_kit", False):
+        product = sheets_db.get_kit(request.product_id)
+    else:
+        product = sheets_db.get_product(request.product_id)
+        
     if not product:
-        raise ValueError("Product not found")
+        raise ValueError("Product or Kit not found")
         
     unit_cost = await get_loaded_unit_cost(sheets_db, product)
     

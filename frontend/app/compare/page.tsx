@@ -17,7 +17,8 @@ import { Product, ComparatorResponse } from '@/types';
 
 export default function ComparePage() {
   const [products, setProducts] = useState<Product[]>([]);
-  const [selectedProductId, setSelectedProductId] = useState<string>('');
+  const [kits, setKits] = useState<any[]>([]);
+  const [selectedItemKey, setSelectedItemKey] = useState<string>('');
   const [referencePrice, setReferencePrice] = useState<string>('');
   const [shippingOverride, setShippingOverride] = useState<string>('');
 
@@ -26,15 +27,21 @@ export default function ComparePage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    loadProducts();
+    loadProductsAndKits();
   }, []);
 
-  const loadProducts = async () => {
+  const loadProductsAndKits = async () => {
     try {
-      const res = await api.getProducts();
-      setProducts(res);
-      if (res.length > 0) {
-        setSelectedProductId(res[0].id.toString());
+      const [prodRes, kitRes] = await Promise.all([
+        api.getProducts(),
+        api.getKits()
+      ]);
+      setProducts(prodRes);
+      setKits(kitRes);
+      if (prodRes.length > 0) {
+        setSelectedItemKey(`product_${prodRes[0].id}`);
+      } else if (kitRes.length > 0) {
+        setSelectedItemKey(`kit_${kitRes[0].id}`);
       }
     } catch (err) {
       console.error(err);
@@ -50,17 +57,20 @@ export default function ComparePage() {
   // Run comparator
   const handleCompare = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!selectedProductId) return;
+    if (!selectedItemKey) return;
 
     setLoading(true);
     setError(null);
     try {
+      const isKit = selectedItemKey.startsWith('kit_');
+      const itemId = parseInt(selectedItemKey.split('_')[1]);
       const refPriceVal = referencePrice !== '' ? parseFormFloat(referencePrice) : undefined;
       const overrideVal = shippingOverride !== '' ? parseFormFloat(shippingOverride) : undefined;
       const res = await api.compare({
-        product_id: parseInt(selectedProductId),
+        product_id: itemId,
         reference_price: refPriceVal && refPriceVal > 0 ? refPriceVal : undefined,
-        shipping_override: overrideVal
+        shipping_override: overrideVal,
+        is_kit: isKit
       });
       setCompareData(res);
     } catch (err: any) {
@@ -74,14 +84,16 @@ export default function ComparePage() {
 
   // Re-run comparison when product updates to keep view reactive
   useEffect(() => {
-    if (selectedProductId) {
+    if (selectedItemKey) {
       // Reset custom reference price to let backend decide standard 1.5x cost, or manually fill if needed
       setReferencePrice('');
       handleCompare();
     }
-  }, [selectedProductId]);
+  }, [selectedItemKey]);
 
-  const selectedProduct = products.find(p => p.id.toString() === selectedProductId);
+  const selectedItem = selectedItemKey.startsWith('kit_')
+    ? kits.find(k => `kit_${k.id}` === selectedItemKey)
+    : products.find(p => `product_${p.id}` === selectedItemKey);
 
   return (
     <div className="p-6 md:p-8 space-y-8 max-w-7xl mx-auto w-full">
@@ -95,11 +107,11 @@ export default function ComparePage() {
         </p>
       </div>
 
-      {products.length === 0 ? (
+      {products.length === 0 && kits.length === 0 ? (
         <div className="flex flex-col items-center justify-center p-12 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm text-center max-w-lg mx-auto">
           <AlertCircle className="w-12 h-12 text-slate-500 mb-4" />
-          <h3 className="text-lg font-bold dark:text-white mb-2">Nenhum Produto Cadastrado</h3>
-          <p className="text-slate-400 text-sm mb-4">Adicione produtos antes de comparar rentabilidades.</p>
+          <h3 className="text-lg font-bold dark:text-white mb-2">Nenhum Produto ou Kit Cadastrado</h3>
+          <p className="text-slate-400 text-sm mb-4">Adicione produtos ou kits antes de comparar rentabilidades.</p>
           <a href="/products" className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-semibold transition">
             Ir para Cadastros
           </a>
@@ -110,15 +122,24 @@ export default function ComparePage() {
           <div className="p-6 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm">
             <form onSubmit={handleCompare} className="grid grid-cols-1 md:grid-cols-4 gap-6 items-end">
               <div className="space-y-1">
-                <label className="text-xs text-slate-400 font-bold uppercase">Selecionar Produto</label>
+                <label className="text-xs text-slate-400 font-bold uppercase">Selecionar Produto / Kit</label>
                 <select
-                  value={selectedProductId}
-                  onChange={(e) => setSelectedProductId(e.target.value)}
+                  value={selectedItemKey}
+                  onChange={(e) => setSelectedItemKey(e.target.value)}
                   className="w-full px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-800 dark:text-slate-200"
                 >
-                  {products.map(p => (
-                    <option key={p.id} value={p.id}>{p.sku} — {p.name}</option>
-                  ))}
+                  <optgroup label="Produtos">
+                    {products.map(p => (
+                      <option key={`product_${p.id}`} value={`product_${p.id}`}>{p.sku} — {p.name}</option>
+                    ))}
+                  </optgroup>
+                  {kits.length > 0 && (
+                    <optgroup label="Kits">
+                      {kits.map(k => (
+                        <option key={`kit_${k.id}`} value={`kit_${k.id}`}>{k.sku} — {k.name}</option>
+                      ))}
+                    </optgroup>
+                  )}
                 </select>
               </div>
 
@@ -128,7 +149,7 @@ export default function ComparePage() {
                   <span className="absolute left-3 top-2.5 text-slate-500 text-sm font-semibold">R$</span>
                   <input
                     type="text"
-                    placeholder={selectedProduct ? `Padrão: R$ ${(selectedProduct.unit_cost * 1.5).toFixed(2)}` : '0,00'}
+                    placeholder={selectedItem ? `Padrão: R$ ${(selectedItem.unit_cost * 1.5).toFixed(2)}` : '0,00'}
                     value={referencePrice}
                     onChange={(e) => setReferencePrice(e.target.value)}
                     className="w-full pl-9 pr-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-800 dark:text-slate-200"

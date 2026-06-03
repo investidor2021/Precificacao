@@ -17,6 +17,7 @@ class ExtendedComparatorRequest(BaseModel):
     product_id: int
     reference_price: Optional[float] = None
     shipping_override: Optional[float] = None
+    is_kit: Optional[bool] = False
 
 @router.post("/simulate", response_model=SimulatorResult)
 async def simulate_price(request: SimulatorRequest):
@@ -25,7 +26,10 @@ async def simulate_price(request: SimulatorRequest):
         result = await simulate_pricing_engine(sheets_db, request)
         
         # Log simulation to sheets
-        product = sheets_db.get_product(request.product_id)
+        if getattr(request, "is_kit", False):
+            product = sheets_db.get_kit(request.product_id)
+        else:
+            product = sheets_db.get_product(request.product_id)
         
         sim_dict = {
             "product_sku": product["sku"] if product else "CUSTOM",
@@ -60,9 +64,13 @@ async def get_simulation_history():
 
 @router.post("/compare", response_model=ComparatorResponse)
 async def compare_marketplaces(request: ExtendedComparatorRequest):
-    product = sheets_db.get_product(request.product_id)
+    if getattr(request, "is_kit", False):
+        product = sheets_db.get_kit(request.product_id)
+    else:
+        product = sheets_db.get_product(request.product_id)
+        
     if not product:
-        raise HTTPException(status_code=404, detail="Product not found")
+        raise HTTPException(status_code=404, detail="Product or Kit not found")
         
     unit_cost = await get_loaded_unit_cost(sheets_db, product)
     
@@ -88,7 +96,8 @@ async def compare_marketplaces(request: ExtendedComparatorRequest):
             marketplace=mp["key"],
             mode=1,
             input_value=ref_price,
-            shipping_override=request.shipping_override
+            shipping_override=request.shipping_override,
+            is_kit=getattr(request, "is_kit", False)
         )
         
         try:

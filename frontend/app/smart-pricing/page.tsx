@@ -19,10 +19,11 @@ import { Product, SmartPricingResponse, SmartPricingTier } from '@/types';
 
 export default function SmartPricingPage() {
   const [products, setProducts] = useState<Product[]>([]);
+  const [kits, setKits] = useState<any[]>([]);
   
   // Selection Mode
   const [isManualCost, setIsManualCost] = useState(false);
-  const [selectedProductId, setSelectedProductId] = useState<string>('');
+  const [selectedItemKey, setSelectedItemKey] = useState<string>('');
   const [customCost, setCustomCost] = useState<string>('');
   const [category, setCategory] = useState<string>('Eletrônicos');
   
@@ -35,15 +36,21 @@ export default function SmartPricingPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    loadProducts();
+    loadProductsAndKits();
   }, []);
 
-  const loadProducts = async () => {
+  const loadProductsAndKits = async () => {
     try {
-      const res = await api.getProducts();
-      setProducts(res);
-      if (res.length > 0) {
-        setSelectedProductId(res[0].id.toString());
+      const [prodRes, kitRes] = await Promise.all([
+        api.getProducts(),
+        api.getKits()
+      ]);
+      setProducts(prodRes);
+      setKits(kitRes);
+      if (prodRes.length > 0) {
+        setSelectedItemKey(`product_${prodRes[0].id}`);
+      } else if (kitRes.length > 0) {
+        setSelectedItemKey(`kit_${kitRes[0].id}`);
       }
     } catch (err) {
       console.error(err);
@@ -73,11 +80,15 @@ export default function SmartPricingPage() {
     setLoading(true);
     setError(null);
     try {
+      const isKit = selectedItemKey.startsWith('kit_');
+      const itemId = parseInt(selectedItemKey.split('_')[1]);
+      
       const payload = {
-        product_id: isManualCost ? undefined : parseInt(selectedProductId),
+        product_id: isManualCost ? undefined : itemId,
         custom_cost: isManualCost ? parseFormFloat(customCost) : undefined,
         category,
-        competitors
+        competitors,
+        is_kit: isManualCost ? undefined : isKit
       };
       
       const res = await api.smartPricing(payload);
@@ -130,16 +141,27 @@ export default function SmartPricingPage() {
 
               {!isManualCost ? (
                 <select
-                  value={selectedProductId}
-                  onChange={(e) => setSelectedProductId(e.target.value)}
+                  value={selectedItemKey}
+                  onChange={(e) => setSelectedItemKey(e.target.value)}
                   className="w-full px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-800 dark:text-slate-200"
                 >
-                  {products.length === 0 ? (
-                    <option value="">Nenhum produto cadastrado</option>
+                  {products.length === 0 && kits.length === 0 ? (
+                    <option value="">Nenhum produto ou kit cadastrado</option>
                   ) : (
-                    products.map(p => (
-                      <option key={p.id} value={p.id}>{p.sku} — {p.name}</option>
-                    ))
+                    <>
+                      <optgroup label="Produtos">
+                        {products.map(p => (
+                          <option key={`product_${p.id}`} value={`product_${p.id}`}>{p.sku} — {p.name}</option>
+                        ))}
+                      </optgroup>
+                      {kits.length > 0 && (
+                        <optgroup label="Kits">
+                          {kits.map(k => (
+                            <option key={`kit_${k.id}`} value={`kit_${k.id}`}>{k.sku} — {k.name}</option>
+                          ))}
+                        </optgroup>
+                      )}
+                    </>
                   )}
                 </select>
               ) : (

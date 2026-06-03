@@ -98,7 +98,9 @@ class GoogleSheetsService:
             "custos_operacionais": ["id", "name", "amount", "type"],
             "config_ml": ["classic_commission_rate", "premium_commission_rate", "fixed_fee_threshold", "fixed_fee", "tax_rate", "shipping_subsidy_rate"],
             "config_shopee": ["commission_rate", "service_fee_rate", "transaction_fee_rate", "tax_rate", "has_free_shipping_program", "has_cashback_program"],
-            "simulacoes": ["product_sku", "product_name", "marketplace", "mode", "input_value", "calculated_price", "calculated_profit", "calculated_margin", "calculated_roi", "created_at"]
+            "simulacoes": ["product_sku", "product_name", "marketplace", "mode", "input_value", "calculated_price", "calculated_profit", "calculated_margin", "calculated_roi", "created_at"],
+            "kits": ["id", "sku", "name", "category", "weight", "height", "width", "length"],
+            "kit_items": ["id", "kit_id", "product_id", "quantity"]
         }
 
         existing_worksheets = [ws.title for ws in self.spreadsheet.worksheets()]
@@ -441,5 +443,150 @@ class GoogleSheetsService:
         sim_dict["id"] = 999
         sim_dict["created_at"] = created_at
         return sim_dict
+
+    # --- KITS ---
+    def get_kits(self) -> List[Dict[str, Any]]:
+        def fetch_all():
+            kits_ws = self._get_worksheet("kits")
+            items_ws = self._get_worksheet("kit_items")
+            
+            kits_records = kits_ws.get_all_records(value_render_option="UNFORMATTED_VALUE")
+            items_records = items_ws.get_all_records(value_render_option="UNFORMATTED_VALUE")
+            
+            # Load products to populate component details
+            products = self.get_products()
+            prod_map = {p["id"]: p for p in products}
+            
+            # Group items by kit_id
+            items_by_kit = {}
+            for item in items_records:
+                k_id = safe_int(item.get("kit_id"))
+                if not k_id:
+                    continue
+                p_id = safe_int(item.get("product_id"))
+                prod = prod_map.get(p_id, {})
+                
+                item_details = {
+                    "id": safe_int(item.get("id")),
+                    "kit_id": k_id,
+                    "product_id": p_id,
+                    "quantity": safe_int(item.get("quantity") or 1),
+                    "product_sku": prod.get("sku", "UNKNOWN"),
+                    "product_name": prod.get("name", "UNKNOWN"),
+                    "product_purchase_cost": prod.get("purchase_cost", 0.0)
+                }
+                if k_id not in items_by_kit:
+                    items_by_kit[k_id] = []
+                items_by_kit[k_id].append(item_details)
+                
+            kits = []
+            for r in kits_records:
+                k_id = safe_int(r.get("id") or 0)
+                kit_items = items_by_kit.get(k_id, [])
+                
+                # Calculate aggregated purchase cost
+                purchase_cost = sum(item["product_purchase_cost"] * item["quantity"] for item in kit_items)
+                
+                kits.append({
+                    "id": k_id,
+                    "sku": str(r.get("sku")),
+                    "name": str(r.get("name")),
+                    "category": str(r.get("category") or ""),
+                    "weight": safe_float(r.get("weight") or 0.0),
+                    "height": safe_float(r.get("height") or 0.0),
+                    "width": safe_float(r.get("width") or 0.0),
+                    "length": safe_float(r.get("length") or 0.0),
+                    "items": kit_items,
+                    "purchase_cost": round(purchase_cost, 2),
+                    "created_at": datetime.datetime.utcnow().isoformat(),
+                    "updated_at": datetime.datetime.utcnow().isoformat()
+                })
+            return kits
+        return self._get_cached_data("kits", fetch_all)
+
+    def get_kit(self, kit_id: int) -> Optional[Dict[str, Any]]:
+        kits = self.get_kits()
+        for k in kits:
+            if k["id"] == kit_id:
+                return k
+        return None
+
+    def get_kit_by_sku(self, sku: str) -> Optional[Dict[str, Any]]:
+        kits = self.get_kits()
+        for k in kits:
+            if k["sku"] == sku:
+                return k
+        return None
+
+    def create_kit(self, kit_dict: Dict[str, Any]) -> Dict[str, Any]:
+        self._clear_cache()
+        kits_ws = self._get_worksheet("kits")
+        items_ws = self._get_worksheet("kit_items")
+        
+        kits = self.get_kits()
+        new_kit_id = max([k["id"] for k in kits] + [0]) + 1
+        kit_dict["id"] = new_kit_id
+        
+        # 1. Append kit header
+        row_data = [
+            new_kit_id,
+            kit_dict["sku"],
+            kit_dict["name"],
+            kit_dict.get("category", ""),
+            kit_dict.get("weight", 0.0),
+            kit_dict.get("height", 0.0),
+            kit_dict.get("width", 0.0),
+            kit_dict.get("length", 0.0)
+        ]
+        kits_ws.append_row(row_data, value_input_option="RAW")
+        
+        # 2. Append kit items
+        items_records = items_ws.get_all_records(value_render_option="UNFORMATTED_VALUE")
+        new_item_id = max([safe_int(item.get("id") or 0) for item in items_records] + [0]) + 1
+        
+        item_rows = []
+        for item in kit_dict.get("items", []):
+            item_rows.append([
+                new_item_id,
+                new_kit_id,
+                item["product_id"],
+                item["quantity"]
+            ])
+            new_item_id += 1
+            
+        if item_rows:
+            items_ws.append_rows(item_rows, value_input_option="RAW")
+            
+        kit_dict["created_at"] = datetime.datetime.utcnow().isoformat()
+        kit_dict["updated_at"] = datetime.datetime.utcnow().isoformat()
+        
+        self._clear_cache()
+        return self.get_kit(new_kit_id) or kit_dict
+
+    def delete_kit(self, kit_id: int) -> bool:
+        self._clear_cache()
+        kits_ws = self._get_worksheet("kits")
+        items_ws = self._get_worksheet("kit_items")
+        
+        # Delete header
+        kits_records = kits_ws.get_all_records(value_render_option="UNFORMATTED_VALUE")
+        kit_row_idx = -1
+        for i, r in enumerate(kits_records):
+            if safe_int(r.get("id") or 0) == kit_id:
+                kit_row_idx = i + 2
+                break
+        if kit_row_idx == -1:
+            return False
+            
+        kits_ws.delete_rows(kit_row_idx)
+        
+        # Delete related items
+        items_records = items_ws.get_all_records(value_render_option="UNFORMATTED_VALUE")
+        for i in range(len(items_records) - 1, -1, -1):
+            r = items_records[i]
+            if safe_int(r.get("kit_id") or 0) == kit_id:
+                items_ws.delete_rows(i + 2)
+                
+        return True
 
 sheets_db = GoogleSheetsService()

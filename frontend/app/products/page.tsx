@@ -12,16 +12,18 @@ import {
   FileText,
   AlertTriangle,
   Coins,
-  RefreshCw
+  RefreshCw,
+  Layers
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Product, Packaging, OperationalCost } from '@/types';
 
 export default function ProductsPage() {
-  const [activeTab, setActiveTab] = useState<'products' | 'packaging' | 'operational'>('products');
+  const [activeTab, setActiveTab] = useState<'products' | 'kits' | 'packaging' | 'operational'>('products');
   
   // Data lists
   const [products, setProducts] = useState<Product[]>([]);
+  const [kits, setKits] = useState<any[]>([]);
   const [packaging, setPackaging] = useState<Packaging[]>([]);
   const [operational, setOperational] = useState<OperationalCost[]>([]);
   
@@ -30,6 +32,7 @@ export default function ProductsPage() {
 
   // Modals state
   const [showProductModal, setShowProductModal] = useState(false);
+  const [showKitModal, setShowKitModal] = useState(false);
   const [showPkgModal, setShowPkgModal] = useState(false);
   const [showOpModal, setShowOpModal] = useState(false);
 
@@ -41,6 +44,11 @@ export default function ProductsPage() {
   const [productForm, setProductForm] = useState({
     sku: '', name: '', category: '', purchase_cost: '', quantity_acquired: '1',
     weight: '', height: '', width: '', length: ''
+  });
+
+  const [kitForm, setKitForm] = useState({
+    sku: '', name: '', category: '', weight: '', height: '', width: '', length: '',
+    items: [] as { product_id: number; quantity: number }[]
   });
   
   const [pkgForm, setPkgForm] = useState({
@@ -74,14 +82,16 @@ export default function ProductsPage() {
     setLoading(true);
     setError(null);
     try {
-      const [prodRes, pkgRes, opRes] = await Promise.all([
+      const [prodRes, pkgRes, opRes, kitRes] = await Promise.all([
         api.getProducts(),
         api.getPackaging(),
-        api.getOperational()
+        api.getOperational(),
+        api.getKits()
       ]);
       setProducts(prodRes);
       setPackaging(pkgRes);
       setOperational(opRes);
+      setKits(kitRes);
     } catch (err: any) {
       console.error(err);
       setError('Erro ao carregar os dados. Verifique a conexão com o servidor.');
@@ -96,6 +106,16 @@ export default function ProductsPage() {
     try {
       await api.deleteProduct(id);
       setProducts(products.filter(p => p.id !== id));
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  const handleDeleteKit = async (id: number) => {
+    if (!confirm('Deseja realmente excluir este kit?')) return;
+    try {
+      await api.deleteKit(id);
+      setKits(kits.filter(k => k.id !== id));
     } catch (err: any) {
       alert(err.message);
     }
@@ -188,6 +208,68 @@ export default function ProductsPage() {
     }
   };
 
+  const resetKitForm = () => {
+    setKitForm({
+      sku: '', name: '', category: '', weight: '', height: '', width: '', length: '',
+      items: []
+    });
+  };
+
+  const handleAddKitItem = () => {
+    if (products.length === 0) return;
+    setKitForm({
+      ...kitForm,
+      items: [...kitForm.items, { product_id: products[0].id, quantity: 1 }]
+    });
+  };
+
+  const handleRemoveKitItem = (index: number) => {
+    setKitForm({
+      ...kitForm,
+      items: kitForm.items.filter((_, i) => i !== index)
+    });
+  };
+
+  const handleKitItemChange = (index: number, field: 'product_id' | 'quantity', value: any) => {
+    const updated = [...kitForm.items];
+    updated[index] = { ...updated[index], [field]: value };
+    setKitForm({ ...kitForm, items: updated });
+  };
+
+  const currentKitCost = kitForm.items.reduce((sum, item) => {
+    const prod = products.find(p => p.id === item.product_id);
+    return sum + (prod ? prod.purchase_cost * item.quantity : 0);
+  }, 0);
+
+  const handleKitFormSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (kitForm.items.length === 0) {
+      alert('Adicione pelo menos um produto ao kit.');
+      return;
+    }
+    try {
+      const payload = {
+        sku: kitForm.sku,
+        name: kitForm.name,
+        category: kitForm.category,
+        weight: parseFormFloat(kitForm.weight),
+        height: parseFormFloat(kitForm.height),
+        width: parseFormFloat(kitForm.width),
+        length: parseFormFloat(kitForm.length),
+        items: kitForm.items.map(item => ({
+          product_id: item.product_id,
+          quantity: item.quantity
+        }))
+      };
+      const res = await api.createKit(payload);
+      setKits([res, ...kits]);
+      setShowKitModal(false);
+      resetKitForm();
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
   const handleCreatePkg = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -241,7 +323,7 @@ export default function ProductsPage() {
       </div>
 
       {/* Tabs Selector */}
-      <div className="flex space-x-1 p-1 bg-slate-100 dark:bg-slate-950 rounded-xl max-w-lg border border-slate-200 dark:border-slate-800">
+      <div className="flex space-x-1 p-1 bg-slate-100 dark:bg-slate-950 rounded-xl max-w-xl border border-slate-200 dark:border-slate-800">
         <button
           onClick={() => setActiveTab('products')}
           className={`flex-1 flex items-center justify-center space-x-2 py-2.5 rounded-lg text-sm font-semibold transition ${
@@ -252,6 +334,17 @@ export default function ProductsPage() {
         >
           <Package className="w-4 h-4" />
           <span>Produtos</span>
+        </button>
+        <button
+          onClick={() => setActiveTab('kits')}
+          className={`flex-1 flex items-center justify-center space-x-2 py-2.5 rounded-lg text-sm font-semibold transition ${
+            activeTab === 'kits'
+              ? 'bg-white dark:bg-slate-800 text-emerald-500 dark:text-emerald-400 shadow-sm'
+              : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+          }`}
+        >
+          <Layers className="w-4 h-4" />
+          <span>Kits</span>
         </button>
         <button
           onClick={() => setActiveTab('packaging')}
@@ -349,6 +442,78 @@ export default function ProductsPage() {
                               onClick={() => handleDeleteProduct(p.id)}
                               className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-500/10 transition"
                               title="Excluir produto"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Tab 1.5: Kits */}
+          {activeTab === 'kits' && (
+            <div className="space-y-6">
+              <div className="flex justify-between items-center">
+                <h2 className="text-xl font-bold dark:text-white">Kits de Produtos</h2>
+                <button
+                  onClick={() => { resetKitForm(); setShowKitModal(true); }}
+                  className="flex items-center space-x-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-semibold shadow-md shadow-emerald-500/10 transition"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Cadastrar Kit</span>
+                </button>
+              </div>
+
+              {kits.length === 0 ? (
+                <div className="text-center p-12 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-850 rounded-2xl">
+                  <Layers className="w-12 h-12 text-slate-500 mx-auto mb-3" />
+                  <p className="text-slate-400">Nenhum kit cadastrado até o momento.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto bg-white dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                  <table className="w-full text-left border-collapse text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40 text-slate-500 font-semibold">
+                        <th className="px-6 py-4">SKU</th>
+                        <th className="px-6 py-4">Nome</th>
+                        <th className="px-6 py-4">Categoria</th>
+                        <th className="px-6 py-4">Itens Integrantes</th>
+                        <th className="px-6 py-4">Custo Compra</th>
+                        <th className="px-6 py-4">Custo Carregado</th>
+                        <th className="px-6 py-4">Medidas (CxLxA)</th>
+                        <th className="px-6 py-4 text-right">Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
+                      {kits.map((k) => (
+                        <tr key={k.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-900/10 transition">
+                          <td className="px-6 py-4 font-mono font-bold text-slate-600 dark:text-slate-400">{k.sku}</td>
+                          <td className="px-6 py-4 font-medium dark:text-white">{k.name}</td>
+                          <td className="px-6 py-4 text-slate-500">{k.category || '—'}</td>
+                          <td className="px-6 py-4 text-slate-500">
+                            <div className="flex flex-col space-y-1">
+                              {k.items?.map((item: any, idx: number) => (
+                                <span key={idx} className="text-xs bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded text-slate-600 dark:text-slate-350">
+                                  {item.quantity}x {item.product_sku || 'Item'} ({item.product_name})
+                                </span>
+                              ))}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 text-slate-600 dark:text-slate-400">R$ {k.purchase_cost.toFixed(2)}</td>
+                          <td className="px-6 py-4 font-semibold text-emerald-500">R$ {k.unit_cost.toFixed(2)}</td>
+                          <td className="px-6 py-4 text-slate-500">
+                            {k.length}x{k.width}x{k.height} cm ({k.weight} kg)
+                          </td>
+                          <td className="px-6 py-4 text-right flex justify-end space-x-2">
+                            <button
+                              onClick={() => handleDeleteKit(k.id)}
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-500/10 transition"
+                              title="Excluir kit"
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
@@ -722,6 +887,178 @@ export default function ProductsPage() {
                   className="px-6 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-semibold shadow-md shadow-emerald-500/10 transition"
                 >
                   Salvar
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {/* --- Kit Registration Modal --- */}
+      {showKitModal && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-900 flex justify-between items-center">
+              <h3 className="text-lg font-bold dark:text-white">Cadastrar Novo Kit</h3>
+              <button 
+                onClick={() => setShowKitModal(false)}
+                className="text-slate-400 hover:text-slate-200 p-1"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <form onSubmit={handleKitFormSubmit} className="p-6 overflow-y-auto space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-xs text-slate-400 font-bold uppercase">SKU / Código do Kit</label>
+                  <input
+                    type="text" required placeholder="Ex: KIT-REFLETORES-3X"
+                    value={kitForm.sku}
+                    onChange={(e) => setKitForm({ ...kitForm, sku: e.target.value })}
+                    className="w-full px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-slate-400 font-bold uppercase">Nome do Kit</label>
+                  <input
+                    type="text" required placeholder="Ex: Kit 3x Refletor Led ECO 200W"
+                    value={kitForm.name}
+                    onChange={(e) => setKitForm({ ...kitForm, name: e.target.value })}
+                    className="w-full px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-slate-400 font-bold uppercase">Categoria</label>
+                  <input
+                    type="text" placeholder="Ex: Kits Eletrônicos"
+                    value={kitForm.category}
+                    onChange={(e) => setKitForm({ ...kitForm, category: e.target.value })}
+                    className="w-full px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+              </div>
+
+              {/* Dynamic Items list */}
+              <div className="border-t border-slate-200 dark:border-slate-900 pt-6 space-y-4">
+                <div className="flex justify-between items-center">
+                  <h4 className="text-sm font-bold dark:text-white uppercase tracking-wider">Produtos do Kit</h4>
+                  <button
+                    type="button"
+                    onClick={handleAddKitItem}
+                    className="flex items-center space-x-1.5 px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-xs font-semibold transition"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Adicionar Produto</span>
+                  </button>
+                </div>
+
+                {kitForm.items.length === 0 ? (
+                  <div className="text-center py-6 border border-dashed border-slate-200 dark:border-slate-850 rounded-xl text-slate-500 text-xs">
+                    Nenhum produto adicionado. Clique no botão acima para montar o kit.
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {kitForm.items.map((item, idx) => (
+                      <div key={idx} className="flex items-center space-x-3 bg-slate-50 dark:bg-slate-900/40 p-3 rounded-xl border border-slate-200 dark:border-slate-850">
+                        <div className="flex-1 space-y-1">
+                          <label className="text-[10px] text-slate-400 font-bold uppercase">Produto</label>
+                          <select
+                            value={item.product_id}
+                            onChange={(e) => handleKitItemChange(idx, 'product_id', parseInt(e.target.value))}
+                            className="w-full px-2 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-800 dark:text-slate-200"
+                          >
+                            {products.map(p => (
+                              <option key={p.id} value={p.id}>
+                                {p.sku} — {p.name} (R$ {p.purchase_cost.toFixed(2)})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="w-24 space-y-1">
+                          <label className="text-[10px] text-slate-400 font-bold uppercase">Quantidade</label>
+                          <input
+                            type="number" min="1" required
+                            value={item.quantity}
+                            onChange={(e) => handleKitItemChange(idx, 'quantity', parseInt(e.target.value) || 1)}
+                            className="w-full px-2 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveKitItem(idx)}
+                          className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-500/10 rounded-lg mt-5 transition"
+                          title="Remover item"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Kit Purchase Cost preview */}
+                <div className="p-4 bg-emerald-500/5 border border-emerald-500/10 rounded-xl flex items-center justify-between text-sm">
+                  <span className="text-slate-400 font-semibold">Custo de Compra Consolidado:</span>
+                  <span className="font-bold text-emerald-500">R$ {currentKitCost.toFixed(2)}</span>
+                </div>
+              </div>
+
+              {/* Kit Logistics */}
+              <div className="border-t border-slate-200 dark:border-slate-900 pt-6 space-y-4">
+                <h4 className="text-sm font-bold dark:text-white uppercase tracking-wider">Logística e Embalagem do Kit</h4>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-400 font-bold uppercase">Peso (kg)</label>
+                    <input
+                      type="text" required placeholder="Ex: 0,60"
+                      value={kitForm.weight}
+                      onChange={(e) => setKitForm({ ...kitForm, weight: e.target.value })}
+                      className="w-full px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-400 font-bold uppercase">Comprimento (cm)</label>
+                    <input
+                      type="text" required placeholder="Ex: 20,0"
+                      value={kitForm.length}
+                      onChange={(e) => setKitForm({ ...kitForm, length: e.target.value })}
+                      className="w-full px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-400 font-bold uppercase">Largura (cm)</label>
+                    <input
+                      type="text" required placeholder="Ex: 15,0"
+                      value={kitForm.width}
+                      onChange={(e) => setKitForm({ ...kitForm, width: e.target.value })}
+                      className="w-full px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-400 font-bold uppercase">Altura (cm)</label>
+                    <input
+                      type="text" required placeholder="Ex: 10,0"
+                      value={kitForm.height}
+                      onChange={(e) => setKitForm({ ...kitForm, height: e.target.value })}
+                      className="w-full px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="border-t border-slate-200 dark:border-slate-900 pt-6 flex justify-end space-x-3">
+                <button
+                  type="button"
+                  onClick={() => setShowKitModal(false)}
+                  className="px-4 py-2 border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-900 rounded-lg text-slate-700 dark:text-slate-300 text-sm font-semibold transition"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-6 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-semibold shadow-md shadow-emerald-500/10 transition"
+                >
+                  Salvar Kit
                 </button>
               </div>
             </form>

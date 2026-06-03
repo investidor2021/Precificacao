@@ -148,6 +148,7 @@ class SimulatorRequest(BaseModel):
     input_value: float # selling price R$, margin % (e.g. 20 for 20%), or profit R$
     reputation_good: Optional[bool] = True
     shipping_override: Optional[float] = None
+    is_kit: Optional[bool] = False
 
 class SimulatorResult(BaseModel):
     price: float
@@ -189,6 +190,7 @@ class SmartPricingRequest(BaseModel):
     custom_cost: Optional[float] = None
     category: str
     competitors: List[float]
+    is_kit: Optional[bool] = False
 
 class SmartPricingTier(BaseModel):
     strategy: str # "Mínimo", "Ideal", "Agressivo"
@@ -228,3 +230,45 @@ class DashboardResponse(BaseModel):
     profit_by_product: List[ProfitByProductItem]
     marketplace_comparison: List[MarketShareItem]
     margin_evolution: List[MarginEvolutionItem]
+
+
+# --- Kits ---
+class KitItemBase(BaseModel):
+    product_id: int
+    quantity: int
+
+class KitItemCreate(KitItemBase):
+    pass
+
+class KitItemResponse(KitItemBase):
+    id: int
+    kit_id: int
+    product_sku: Optional[str] = None
+    product_name: Optional[str] = None
+    product_purchase_cost: Optional[float] = None
+
+    class Config:
+        from_attributes = True
+
+class KitBase(BaseModel):
+    sku: str
+    name: str
+    category: Optional[str] = None
+    weight: float = 0.0
+    height: float = 0.0
+    width: float = 0.0
+    length: float = 0.0
+
+class KitCreate(KitBase):
+    items: List[KitItemCreate]
+
+class KitResponse(KitBase):
+    id: int
+    items: List[KitItemResponse]
+    purchase_cost: float = 0.0
+    unit_cost: float = 0.0
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True

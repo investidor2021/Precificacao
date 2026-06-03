@@ -5,7 +5,7 @@ from app.core.config import settings
 from app.services.sheets import sheets_db
 
 # Import routers
-from app.api.endpoints import products, costs, marketplaces, simulations, dashboard
+from app.api.endpoints import products, costs, marketplaces, simulations, dashboard, kits
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -26,6 +26,7 @@ app.add_middleware(
 
 # Include routers
 app.include_router(products.router, prefix="/api/products", tags=["Produtos"])
+app.include_router(kits.router, prefix="/api/kits", tags=["Kits"])
 app.include_router(costs.router, prefix="/api/costs", tags=["Custos"])
 app.include_router(marketplaces.router, prefix="/api/marketplaces", tags=["Configurações de Marketplaces"])
 app.include_router(simulations.router, prefix="/api/simulations", tags=["Simulações"])
