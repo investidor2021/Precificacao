@@ -54,6 +54,24 @@ class GoogleSheetsService:
     def __init__(self):
         self.client = None
         self.spreadsheet = None
+        self._cache = {}
+        self._cache_time = {}
+        self._cache_ttl = 10 # seconds
+
+    def _clear_cache(self):
+        self._cache.clear()
+        self._cache_time.clear()
+
+    def _get_cached_data(self, key: str, fetch_func):
+        import time
+        now = time.time()
+        if key in self._cache and (now - self._cache_time[key]) < self._cache_ttl:
+            return self._cache[key]
+        
+        data = fetch_func()
+        self._cache[key] = data
+        self._cache_time[key] = now
+        return data
 
     def connect(self):
         try:
@@ -107,27 +125,29 @@ class GoogleSheetsService:
 
     # --- PRODUCTS ---
     def get_products(self) -> List[Dict[str, Any]]:
-        ws = self._get_worksheet("produtos")
-        records = ws.get_all_records()
-        products = []
-        for r in records:
-            products.append({
-                "id": safe_int(r.get("id") or 0),
-                "sku": str(r.get("sku")),
-                "name": str(r.get("name")),
-                "category": str(r.get("category") or ""),
-                "purchase_cost": safe_float(r.get("purchase_cost") or 0.0),
-                "quantity_acquired": safe_int(r.get("quantity_acquired") or 1),
-                "weight": safe_float(r.get("weight") or 0.0),
-                "height": safe_float(r.get("height") or 0.0),
-                "width": safe_float(r.get("width") or 0.0),
-                "length": safe_float(r.get("length") or 0.0),
-                "cubic_weight": safe_float(r.get("cubic_weight") or 0.0),
-                "unit_cost": safe_float(r.get("unit_cost") or 0.0),
-                "created_at": datetime.datetime.utcnow().isoformat(),
-                "updated_at": datetime.datetime.utcnow().isoformat()
-            })
-        return products
+        def fetch():
+            ws = self._get_worksheet("produtos")
+            records = ws.get_all_records()
+            products = []
+            for r in records:
+                products.append({
+                    "id": safe_int(r.get("id") or 0),
+                    "sku": str(r.get("sku")),
+                    "name": str(r.get("name")),
+                    "category": str(r.get("category") or ""),
+                    "purchase_cost": safe_float(r.get("purchase_cost") or 0.0),
+                    "quantity_acquired": safe_int(r.get("quantity_acquired") or 1),
+                    "weight": safe_float(r.get("weight") or 0.0),
+                    "height": safe_float(r.get("height") or 0.0),
+                    "width": safe_float(r.get("width") or 0.0),
+                    "length": safe_float(r.get("length") or 0.0),
+                    "cubic_weight": safe_float(r.get("cubic_weight") or 0.0),
+                    "unit_cost": safe_float(r.get("unit_cost") or 0.0),
+                    "created_at": datetime.datetime.utcnow().isoformat(),
+                    "updated_at": datetime.datetime.utcnow().isoformat()
+                })
+            return products
+        return self._get_cached_data("products", fetch)
 
     def get_product(self, product_id: int) -> Optional[Dict[str, Any]]:
         products = self.get_products()
@@ -144,6 +164,7 @@ class GoogleSheetsService:
         return None
 
     def create_product(self, product_dict: Dict[str, Any]) -> Dict[str, Any]:
+        self._clear_cache()
         ws = self._get_worksheet("produtos")
         products = self.get_products()
         
@@ -171,6 +192,7 @@ class GoogleSheetsService:
         return product_dict
 
     def update_product(self, product_id: int, update_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        self._clear_cache()
         ws = self._get_worksheet("produtos")
         records = ws.get_all_records()
         
@@ -208,6 +230,7 @@ class GoogleSheetsService:
         return current_product
 
     def delete_product(self, product_id: int) -> bool:
+        self._clear_cache()
         ws = self._get_worksheet("produtos")
         records = ws.get_all_records()
         for i, r in enumerate(records):
@@ -218,17 +241,20 @@ class GoogleSheetsService:
 
     # --- PACKAGING ---
     def get_packaging(self) -> List[Dict[str, Any]]:
-        ws = self._get_worksheet("embalagens")
-        records = ws.get_all_records()
-        return [{
-            "id": safe_int(r.get("id") or 0),
-            "name": str(r.get("name")),
-            "cost": safe_float(r.get("cost") or 0.0),
-            "type": str(r.get("type")),
-            "created_at": datetime.datetime.utcnow().isoformat()
-        } for r in records]
+        def fetch():
+            ws = self._get_worksheet("embalagens")
+            records = ws.get_all_records()
+            return [{
+                "id": safe_int(r.get("id") or 0),
+                "name": str(r.get("name")),
+                "cost": safe_float(r.get("cost") or 0.0),
+                "type": str(r.get("type")),
+                "created_at": datetime.datetime.utcnow().isoformat()
+            } for r in records]
+        return self._get_cached_data("packaging", fetch)
 
     def create_packaging(self, pkg_dict: Dict[str, Any]) -> Dict[str, Any]:
+        self._clear_cache()
         ws = self._get_worksheet("embalagens")
         pkgs = self.get_packaging()
         new_id = max([p["id"] for p in pkgs] + [0]) + 1
@@ -239,6 +265,7 @@ class GoogleSheetsService:
         return pkg_dict
 
     def delete_packaging(self, pkg_id: int) -> bool:
+        self._clear_cache()
         ws = self._get_worksheet("embalagens")
         records = ws.get_all_records()
         for i, r in enumerate(records):
@@ -249,17 +276,20 @@ class GoogleSheetsService:
 
     # --- OPERATIONAL COSTS ---
     def get_operational_costs(self) -> List[Dict[str, Any]]:
-        ws = self._get_worksheet("custos_operacionais")
-        records = ws.get_all_records()
-        return [{
-            "id": safe_int(r.get("id") or 0),
-            "name": str(r.get("name")),
-            "amount": safe_float(r.get("amount") or 0.0),
-            "type": str(r.get("type")),
-            "created_at": datetime.datetime.utcnow().isoformat()
-        } for r in records]
+        def fetch():
+            ws = self._get_worksheet("custos_operacionais")
+            records = ws.get_all_records()
+            return [{
+                "id": safe_int(r.get("id") or 0),
+                "name": str(r.get("name")),
+                "amount": safe_float(r.get("amount") or 0.0),
+                "type": str(r.get("type")),
+                "created_at": datetime.datetime.utcnow().isoformat()
+            } for r in records]
+        return self._get_cached_data("operational_costs", fetch)
 
     def create_operational_cost(self, op_dict: Dict[str, Any]) -> Dict[str, Any]:
+        self._clear_cache()
         ws = self._get_worksheet("custos_operacionais")
         ops = self.get_operational_costs()
         new_id = max([o["id"] for o in ops] + [0]) + 1
@@ -270,6 +300,7 @@ class GoogleSheetsService:
         return op_dict
 
     def delete_operational_cost(self, op_id: int) -> bool:
+        self._clear_cache()
         ws = self._get_worksheet("custos_operacionais")
         records = ws.get_all_records()
         for i, r in enumerate(records):
@@ -280,32 +311,35 @@ class GoogleSheetsService:
 
     # --- MARKETPLACE CONFIGS ---
     def get_ml_config(self) -> Dict[str, Any]:
-        ws = self._get_worksheet("config_ml")
-        records = ws.get_all_records()
-        if not records:
+        def fetch():
+            ws = self._get_worksheet("config_ml")
+            records = ws.get_all_records()
+            if not records:
+                return {
+                    "id": 1,
+                    "classic_commission_rate": 11.5,
+                    "premium_commission_rate": 16.5,
+                    "fixed_fee_threshold": 79.0,
+                    "fixed_fee": 6.0,
+                    "tax_rate": 4.0,
+                    "shipping_subsidy_rate": 50.0,
+                    "is_active": True
+                }
+            r = records[0]
             return {
                 "id": 1,
-                "classic_commission_rate": 11.5,
-                "premium_commission_rate": 16.5,
-                "fixed_fee_threshold": 79.0,
-                "fixed_fee": 6.0,
-                "tax_rate": 4.0,
-                "shipping_subsidy_rate": 50.0,
+                "classic_commission_rate": safe_float(r.get("classic_commission_rate") or 11.5),
+                "premium_commission_rate": safe_float(r.get("premium_commission_rate") or 16.5),
+                "fixed_fee_threshold": safe_float(r.get("fixed_fee_threshold") or 79.0),
+                "fixed_fee": safe_float(r.get("fixed_fee") or 6.0),
+                "tax_rate": safe_float(r.get("tax_rate") or 4.0),
+                "shipping_subsidy_rate": safe_float(r.get("shipping_subsidy_rate") or 50.0),
                 "is_active": True
             }
-        r = records[0]
-        return {
-            "id": 1,
-            "classic_commission_rate": safe_float(r.get("classic_commission_rate") or 11.5),
-            "premium_commission_rate": safe_float(r.get("premium_commission_rate") or 16.5),
-            "fixed_fee_threshold": safe_float(r.get("fixed_fee_threshold") or 79.0),
-            "fixed_fee": safe_float(r.get("fixed_fee") or 6.0),
-            "tax_rate": safe_float(r.get("tax_rate") or 4.0),
-            "shipping_subsidy_rate": safe_float(r.get("shipping_subsidy_rate") or 50.0),
-            "is_active": True
-        }
+        return self._get_cached_data("ml_config", fetch)
 
     def update_ml_config(self, cfg: Dict[str, Any]) -> Dict[str, Any]:
+        self._clear_cache()
         ws = self._get_worksheet("config_ml")
         row_values = [
             cfg["classic_commission_rate"],
@@ -321,32 +355,35 @@ class GoogleSheetsService:
         return cfg
 
     def get_shopee_config(self) -> Dict[str, Any]:
-        ws = self._get_worksheet("config_shopee")
-        records = ws.get_all_records()
-        if not records:
+        def fetch():
+            ws = self._get_worksheet("config_shopee")
+            records = ws.get_all_records()
+            if not records:
+                return {
+                    "id": 1,
+                    "commission_rate": 14.0,
+                    "service_fee_rate": 6.0,
+                    "transaction_fee_rate": 2.0,
+                    "tax_rate": 4.0,
+                    "has_free_shipping_program": True,
+                    "has_cashback_program": False,
+                    "is_active": True
+                }
+            r = records[0]
             return {
                 "id": 1,
-                "commission_rate": 14.0,
-                "service_fee_rate": 6.0,
-                "transaction_fee_rate": 2.0,
-                "tax_rate": 4.0,
-                "has_free_shipping_program": True,
-                "has_cashback_program": False,
+                "commission_rate": safe_float(r.get("commission_rate") or 14.0),
+                "service_fee_rate": safe_float(r.get("service_fee_rate") or 6.0),
+                "transaction_fee_rate": safe_float(r.get("transaction_fee_rate") or 2.0),
+                "tax_rate": safe_float(r.get("tax_rate") or 4.0),
+                "has_free_shipping_program": str(r.get("has_free_shipping_program")).upper() == "TRUE",
+                "has_cashback_program": str(r.get("has_cashback_program")).upper() == "TRUE",
                 "is_active": True
             }
-        r = records[0]
-        return {
-            "id": 1,
-            "commission_rate": safe_float(r.get("commission_rate") or 14.0),
-            "service_fee_rate": safe_float(r.get("service_fee_rate") or 6.0),
-            "transaction_fee_rate": safe_float(r.get("transaction_fee_rate") or 2.0),
-            "tax_rate": safe_float(r.get("tax_rate") or 4.0),
-            "has_free_shipping_program": str(r.get("has_free_shipping_program")).upper() == "TRUE",
-            "has_cashback_program": str(r.get("has_cashback_program")).upper() == "TRUE",
-            "is_active": True
-        }
+        return self._get_cached_data("shopee_config", fetch)
 
     def update_shopee_config(self, cfg: Dict[str, Any]) -> Dict[str, Any]:
+        self._clear_cache()
         ws = self._get_worksheet("config_shopee")
         row_values = [
             cfg["commission_rate"],
@@ -363,26 +400,29 @@ class GoogleSheetsService:
 
     # --- SIMULATIONS ---
     def get_simulations(self) -> List[Dict[str, Any]]:
-        ws = self._get_worksheet("simulacoes")
-        records = ws.get_all_records()
-        simulations = []
-        for i, r in enumerate(records):
-            simulations.append({
-                "id": i + 1,
-                "product_sku": str(r.get("product_sku") or ""),
-                "product_name": str(r.get("product_name") or ""),
-                "marketplace": str(r.get("marketplace") or ""),
-                "mode": safe_int(r.get("mode") or 1),
-                "input_value": safe_float(r.get("input_value") or 0.0),
-                "calculated_price": safe_float(r.get("calculated_price") or 0.0),
-                "calculated_profit": safe_float(r.get("calculated_profit") or 0.0),
-                "calculated_margin": safe_float(r.get("calculated_margin") or 0.0),
-                "calculated_roi": safe_float(r.get("calculated_roi") or 0.0),
-                "created_at": str(r.get("created_at") or datetime.datetime.utcnow().isoformat())
-            })
-        return simulations
+        def fetch():
+            ws = self._get_worksheet("simulacoes")
+            records = ws.get_all_records()
+            simulations = []
+            for i, r in enumerate(records):
+                simulations.append({
+                    "id": i + 1,
+                    "product_sku": str(r.get("product_sku") or ""),
+                    "product_name": str(r.get("product_name") or ""),
+                    "marketplace": str(r.get("marketplace") or ""),
+                    "mode": safe_int(r.get("mode") or 1),
+                    "input_value": safe_float(r.get("input_value") or 0.0),
+                    "calculated_price": safe_float(r.get("calculated_price") or 0.0),
+                    "calculated_profit": safe_float(r.get("calculated_profit") or 0.0),
+                    "calculated_margin": safe_float(r.get("calculated_margin") or 0.0),
+                    "calculated_roi": safe_float(r.get("calculated_roi") or 0.0),
+                    "created_at": str(r.get("created_at") or datetime.datetime.utcnow().isoformat())
+                })
+            return simulations
+        return self._get_cached_data("simulations", fetch)
 
     def create_simulation(self, sim_dict: Dict[str, Any]) -> Dict[str, Any]:
+        self._clear_cache()
         ws = self._get_worksheet("simulacoes")
         created_at = datetime.datetime.utcnow().isoformat()
         row_values = [
