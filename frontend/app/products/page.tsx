@@ -6,6 +6,7 @@ import {
   Archive, 
   TrendingUp, 
   Trash2, 
+  Pencil,
   Plus, 
   X,
   FileText,
@@ -31,6 +32,10 @@ export default function ProductsPage() {
   const [showProductModal, setShowProductModal] = useState(false);
   const [showPkgModal, setShowPkgModal] = useState(false);
   const [showOpModal, setShowOpModal] = useState(false);
+
+  // Edit states
+  const [isEditing, setIsEditing] = useState(false);
+  const [editingProductId, setEditingProductId] = useState<number | null>(null);
 
   // Form states
   const [productForm, setProductForm] = useState({
@@ -89,7 +94,6 @@ export default function ProductsPage() {
     try {
       await api.deletePackaging(id);
       setPackaging(packaging.filter(p => p.id !== id));
-      // Reload products to update unit costs since packaging changed
       const prodRes = await api.getProducts();
       setProducts(prodRes);
     } catch (err: any) {
@@ -102,7 +106,6 @@ export default function ProductsPage() {
     try {
       await api.deleteOperational(id);
       setOperational(operational.filter(o => o.id !== id));
-      // Reload products to update unit costs
       const prodRes = await api.getProducts();
       setProducts(prodRes);
     } catch (err: any) {
@@ -110,17 +113,52 @@ export default function ProductsPage() {
     }
   };
 
-  // --- Creation actions ---
-  const handleCreateProduct = async (e: React.FormEvent) => {
+  // --- Form resetting ---
+  const resetProductForm = () => {
+    setProductForm({
+      sku: '', name: '', category: '', purchase_cost: 0, quantity_acquired: 1,
+      weight: 0, height: 0, width: 0, length: 0
+    });
+    setIsEditing(false);
+    setEditingProductId(null);
+  };
+
+  const handleCloseProductModal = () => {
+    setShowProductModal(false);
+    resetProductForm();
+  };
+
+  // --- Edit triggering ---
+  const handleEditProductClick = (product: Product) => {
+    setProductForm({
+      sku: product.sku,
+      name: product.name,
+      category: product.category || '',
+      purchase_cost: product.purchase_cost,
+      quantity_acquired: product.quantity_acquired,
+      weight: product.weight,
+      height: product.height,
+      width: product.width,
+      length: product.length
+    });
+    setEditingProductId(product.id);
+    setIsEditing(true);
+    setShowProductModal(true);
+  };
+
+  // --- Creation / Update actions ---
+  const handleProductFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const res = await api.createProduct(productForm);
-      setProducts([res, ...products]);
+      if (isEditing && editingProductId !== null) {
+        const res = await api.updateProduct(editingProductId, productForm);
+        setProducts(products.map(p => p.id === editingProductId ? res : p));
+      } else {
+        const res = await api.createProduct(productForm);
+        setProducts([res, ...products]);
+      }
       setShowProductModal(false);
-      setProductForm({
-        sku: '', name: '', category: '', purchase_cost: 0, quantity_acquired: 1,
-        weight: 0, height: 0, width: 0, length: 0
-      });
+      resetProductForm();
     } catch (err: any) {
       alert(err.message);
     }
@@ -133,7 +171,6 @@ export default function ProductsPage() {
       setPackaging([...packaging, res]);
       setShowPkgModal(false);
       setPkgForm({ name: '', cost: 0, type: 'box' });
-      // Reload products since loaded costs update
       const prodRes = await api.getProducts();
       setProducts(prodRes);
     } catch (err: any) {
@@ -148,7 +185,6 @@ export default function ProductsPage() {
       setOperational([...operational, res]);
       setShowOpModal(false);
       setOpForm({ name: '', amount: 0, type: 'fixed' });
-      // Reload products since loaded costs update
       const prodRes = await api.getProducts();
       setProducts(prodRes);
     } catch (err: any) {
@@ -227,7 +263,7 @@ export default function ProductsPage() {
               <div className="flex justify-between items-center">
                 <h2 className="text-xl font-bold dark:text-white">Estoque de Produtos</h2>
                 <button
-                  onClick={() => setShowProductModal(true)}
+                  onClick={() => { resetProductForm(); setShowProductModal(true); }}
                   className="flex items-center space-x-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-semibold shadow-md shadow-emerald-500/10 transition"
                 >
                   <Plus className="w-4 h-4" />
@@ -267,7 +303,14 @@ export default function ProductsPage() {
                             {p.length}x{p.width}x{p.height} cm
                           </td>
                           <td className="px-6 py-4 text-slate-500">{p.cubic_weight.toFixed(3)} kg</td>
-                          <td className="px-6 py-4 text-right">
+                          <td className="px-6 py-4 text-right flex justify-end space-x-2">
+                            <button
+                              onClick={() => handleEditProductClick(p)}
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-500 hover:bg-emerald-500/10 transition"
+                              title="Editar produto"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </button>
                             <button
                               onClick={() => handleDeleteProduct(p.id)}
                               className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-500/10 transition"
@@ -393,21 +436,23 @@ export default function ProductsPage() {
         </>
       )}
 
-      {/* --- Product Registration Modal --- */}
+      {/* --- Product Registration/Editing Modal --- */}
       {showProductModal && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
             <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-900 flex justify-between items-center">
-              <h3 className="text-lg font-bold dark:text-white">Cadastrar Novo Produto</h3>
+              <h3 className="text-lg font-bold dark:text-white">
+                {isEditing ? 'Editar Produto' : 'Cadastrar Novo Produto'}
+              </h3>
               <button 
-                onClick={() => setShowProductModal(false)}
+                onClick={handleCloseProductModal}
                 className="text-slate-400 hover:text-slate-200 p-1"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
             
-            <form onSubmit={handleCreateProduct} className="p-6 overflow-y-auto space-y-6">
+            <form onSubmit={handleProductFormSubmit} className="p-6 overflow-y-auto space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1">
                   <label className="text-xs text-slate-400 font-bold uppercase">SKU / Código</label>
@@ -464,36 +509,36 @@ export default function ProductsPage() {
                   <div className="space-y-1">
                     <label className="text-xs text-slate-400 font-bold uppercase">Peso (kg)</label>
                     <input
-                      type="number" step="0.001" min="0" required
-                      value={productForm.weight || ''}
-                      onChange={(e) => setProductForm({ ...productForm, weight: parseFloat(e.target.value) || 0 })}
+                      type="text" required placeholder="Ex: 0.20"
+                      value={productForm.weight}
+                      onChange={(e) => setProductForm({ ...productForm, weight: parseFloat(e.target.value.replace(",", ".")) || 0 })}
                       className="w-full px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
                     />
                   </div>
                   <div className="space-y-1">
                     <label className="text-xs text-slate-400 font-bold uppercase">Comprimento (cm)</label>
                     <input
-                      type="number" step="0.1" min="0" required
-                      value={productForm.length || ''}
-                      onChange={(e) => setProductForm({ ...productForm, length: parseFloat(e.target.value) || 0 })}
+                      type="text" required placeholder="Ex: 14.2"
+                      value={productForm.length}
+                      onChange={(e) => setProductForm({ ...productForm, length: parseFloat(e.target.value.replace(",", ".")) || 0 })}
                       className="w-full px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
                     />
                   </div>
                   <div className="space-y-1">
                     <label className="text-xs text-slate-400 font-bold uppercase">Largura (cm)</label>
                     <input
-                      type="number" step="0.1" min="0" required
-                      value={productForm.width || ''}
-                      onChange={(e) => setProductForm({ ...productForm, width: parseFloat(e.target.value) || 0 })}
+                      type="text" required placeholder="Ex: 11.8"
+                      value={productForm.width}
+                      onChange={(e) => setProductForm({ ...productForm, width: parseFloat(e.target.value.replace(",", ".")) || 0 })}
                       className="w-full px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
                     />
                   </div>
                   <div className="space-y-1">
                     <label className="text-xs text-slate-400 font-bold uppercase">Altura (cm)</label>
                     <input
-                      type="number" step="0.1" min="0" required
-                      value={productForm.height || ''}
-                      onChange={(e) => setProductForm({ ...productForm, height: parseFloat(e.target.value) || 0 })}
+                      type="text" required placeholder="Ex: 2.3"
+                      value={productForm.height}
+                      onChange={(e) => setProductForm({ ...productForm, height: parseFloat(e.target.value.replace(",", ".")) || 0 })}
                       className="w-full px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
                     />
                   </div>
@@ -509,7 +554,7 @@ export default function ProductsPage() {
               <div className="border-t border-slate-200 dark:border-slate-900 pt-6 flex justify-end space-x-3">
                 <button
                   type="button"
-                  onClick={() => setShowProductModal(false)}
+                  onClick={handleCloseProductModal}
                   className="px-4 py-2 border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-900 rounded-lg text-slate-700 dark:text-slate-300 text-sm font-semibold transition"
                 >
                   Cancelar
@@ -518,7 +563,7 @@ export default function ProductsPage() {
                   type="submit"
                   className="px-6 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-semibold shadow-md shadow-emerald-500/10 transition"
                 >
-                  Salvar Produto
+                  {isEditing ? 'Atualizar Produto' : 'Salvar Produto'}
                 </button>
               </div>
             </form>

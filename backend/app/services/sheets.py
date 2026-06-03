@@ -21,6 +21,14 @@ def safe_int(val: Any, default: int = 0) -> int:
             pass
     return default
 
+def safe_float(val: Any, default: float = 0.0) -> float:
+    if not val:
+        return default
+    try:
+        return float(str(val).replace(",", ".").strip())
+    except (ValueError, TypeError):
+        return default
+
 SCOPE = [
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive"
@@ -35,12 +43,11 @@ def get_sheets_client():
         except Exception as e:
             print(f"Error loading credentials from SPREADSHEET_JSON env: {e}")
             
-    # Fallback to local file
     try:
         creds = Credentials.from_service_account_file(settings.GOOGLE_CREDENTIALS_FILE, scopes=SCOPE)
         return gspread.authorize(creds)
     except Exception as e:
-        print(f"Credentials file {settings.GOOGLE_CREDENTIALS_FILE} not found. Running with mock client or raising exception: {e}")
+        print(f"Credentials file {settings.GOOGLE_CREDENTIALS_FILE} not found: {e}")
         raise e
 
 class GoogleSheetsService:
@@ -67,7 +74,6 @@ class GoogleSheetsService:
             raise e
 
     def initialize_sheets(self):
-        # Define default tabs and headers
         tabs_headers = {
             "produtos": ["id", "sku", "name", "category", "purchase_cost", "quantity_acquired", "weight", "height", "width", "length", "cubic_weight", "unit_cost"],
             "embalagens": ["id", "name", "cost", "type"],
@@ -84,19 +90,16 @@ class GoogleSheetsService:
                 ws = self.spreadsheet.add_worksheet(title=tab_name, rows=100, cols=20)
                 ws.append_row(headers)
                 
-                # Seed default configs immediately on creation
                 if tab_name == "config_ml":
                     ws.append_row([11.5, 16.5, 79.0, 6.0, 4.0, 50.0])
                 elif tab_name == "config_shopee":
                     ws.append_row([14.0, 6.0, 2.0, 4.0, "TRUE", "FALSE"])
             else:
-                # Ensure headers are correct
                 ws = self.spreadsheet.worksheet(tab_name)
                 row1 = ws.row_values(1)
                 if not row1:
                     ws.append_row(headers)
 
-    # --- HELPERS ---
     def _get_worksheet(self, name: str) -> gspread.Worksheet:
         if not self.spreadsheet:
             self.connect()
@@ -106,7 +109,6 @@ class GoogleSheetsService:
     def get_products(self) -> List[Dict[str, Any]]:
         ws = self._get_worksheet("produtos")
         records = ws.get_all_records()
-        # Ensure type conversions
         products = []
         for r in records:
             products.append({
@@ -114,14 +116,14 @@ class GoogleSheetsService:
                 "sku": str(r.get("sku")),
                 "name": str(r.get("name")),
                 "category": str(r.get("category") or ""),
-                "purchase_cost": float(r.get("purchase_cost") or 0.0),
-                "quantity_acquired": int(r.get("quantity_acquired") or 1),
-                "weight": float(r.get("weight") or 0.0),
-                "height": float(r.get("height") or 0.0),
-                "width": float(r.get("width") or 0.0),
-                "length": float(r.get("length") or 0.0),
-                "cubic_weight": float(r.get("cubic_weight") or 0.0),
-                "unit_cost": float(r.get("unit_cost") or 0.0),
+                "purchase_cost": safe_float(r.get("purchase_cost") or 0.0),
+                "quantity_acquired": safe_int(r.get("quantity_acquired") or 1),
+                "weight": safe_float(r.get("weight") or 0.0),
+                "height": safe_float(r.get("height") or 0.0),
+                "width": safe_float(r.get("width") or 0.0),
+                "length": safe_float(r.get("length") or 0.0),
+                "cubic_weight": safe_float(r.get("cubic_weight") or 0.0),
+                "unit_cost": safe_float(r.get("unit_cost") or 0.0),
                 "created_at": datetime.datetime.utcnow().isoformat(),
                 "updated_at": datetime.datetime.utcnow().isoformat()
             })
@@ -145,7 +147,6 @@ class GoogleSheetsService:
         ws = self._get_worksheet("produtos")
         products = self.get_products()
         
-        # Calculate new ID
         new_id = max([p["id"] for p in products] + [0]) + 1
         product_dict["id"] = new_id
         
@@ -177,31 +178,29 @@ class GoogleSheetsService:
         current_product = None
         for i, r in enumerate(records):
             if safe_int(r.get("id") or 0) == product_id:
-                row_idx = i + 2  # 1-indexed, +1 for headers
+                row_idx = i + 2
                 current_product = r
                 break
                 
         if row_idx == -1:
             return None
             
-        # Update current values
         for k, v in update_data.items():
             current_product[k] = v
             
-        # Write back row
         row_data = [
             product_id,
             current_product["sku"],
             current_product["name"],
             current_product.get("category", ""),
-            current_product["purchase_cost"],
-            current_product.get("quantity_acquired", 1),
-            current_product.get("weight", 0.0),
-            current_product.get("height", 0.0),
-            current_product.get("width", 0.0),
-            current_product.get("length", 0.0),
-            current_product.get("cubic_weight", 0.0),
-            current_product.get("unit_cost", 0.0)
+            safe_float(current_product["purchase_cost"]),
+            safe_int(current_product.get("quantity_acquired", 1)),
+            safe_float(current_product.get("weight", 0.0)),
+            safe_float(current_product.get("height", 0.0)),
+            safe_float(current_product.get("width", 0.0)),
+            safe_float(current_product.get("length", 0.0)),
+            safe_float(current_product.get("cubic_weight", 0.0)),
+            safe_float(current_product.get("unit_cost", 0.0))
         ]
         
         ws.update(range_name=f"A{row_idx}:L{row_idx}", values=[row_data])
@@ -224,7 +223,7 @@ class GoogleSheetsService:
         return [{
             "id": safe_int(r.get("id") or 0),
             "name": str(r.get("name")),
-            "cost": float(r.get("cost") or 0.0),
+            "cost": safe_float(r.get("cost") or 0.0),
             "type": str(r.get("type")),
             "created_at": datetime.datetime.utcnow().isoformat()
         } for r in records]
@@ -255,7 +254,7 @@ class GoogleSheetsService:
         return [{
             "id": safe_int(r.get("id") or 0),
             "name": str(r.get("name")),
-            "amount": float(r.get("amount") or 0.0),
+            "amount": safe_float(r.get("amount") or 0.0),
             "type": str(r.get("type")),
             "created_at": datetime.datetime.utcnow().isoformat()
         } for r in records]
@@ -284,7 +283,6 @@ class GoogleSheetsService:
         ws = self._get_worksheet("config_ml")
         records = ws.get_all_records()
         if not records:
-            # Default values fallback
             return {
                 "id": 1,
                 "classic_commission_rate": 11.5,
@@ -298,12 +296,12 @@ class GoogleSheetsService:
         r = records[0]
         return {
             "id": 1,
-            "classic_commission_rate": float(r.get("classic_commission_rate") or 11.5),
-            "premium_commission_rate": float(r.get("premium_commission_rate") or 16.5),
-            "fixed_fee_threshold": float(r.get("fixed_fee_threshold") or 79.0),
-            "fixed_fee": float(r.get("fixed_fee") or 6.0),
-            "tax_rate": float(r.get("tax_rate") or 4.0),
-            "shipping_subsidy_rate": float(r.get("shipping_subsidy_rate") or 50.0),
+            "classic_commission_rate": safe_float(r.get("classic_commission_rate") or 11.5),
+            "premium_commission_rate": safe_float(r.get("premium_commission_rate") or 16.5),
+            "fixed_fee_threshold": safe_float(r.get("fixed_fee_threshold") or 79.0),
+            "fixed_fee": safe_float(r.get("fixed_fee") or 6.0),
+            "tax_rate": safe_float(r.get("tax_rate") or 4.0),
+            "shipping_subsidy_rate": safe_float(r.get("shipping_subsidy_rate") or 50.0),
             "is_active": True
         }
 
@@ -339,10 +337,10 @@ class GoogleSheetsService:
         r = records[0]
         return {
             "id": 1,
-            "commission_rate": float(r.get("commission_rate") or 14.0),
-            "service_fee_rate": float(r.get("service_fee_rate") or 6.0),
-            "transaction_fee_rate": float(r.get("transaction_fee_rate") or 2.0),
-            "tax_rate": float(r.get("tax_rate") or 4.0),
+            "commission_rate": safe_float(r.get("commission_rate") or 14.0),
+            "service_fee_rate": safe_float(r.get("service_fee_rate") or 6.0),
+            "transaction_fee_rate": safe_float(r.get("transaction_fee_rate") or 2.0),
+            "tax_rate": safe_float(r.get("tax_rate") or 4.0),
             "has_free_shipping_program": str(r.get("has_free_shipping_program")).upper() == "TRUE",
             "has_cashback_program": str(r.get("has_cashback_program")).upper() == "TRUE",
             "is_active": True
@@ -375,11 +373,11 @@ class GoogleSheetsService:
                 "product_name": str(r.get("product_name") or ""),
                 "marketplace": str(r.get("marketplace") or ""),
                 "mode": safe_int(r.get("mode") or 1),
-                "input_value": float(r.get("input_value") or 0.0),
-                "calculated_price": float(r.get("calculated_price") or 0.0),
-                "calculated_profit": float(r.get("calculated_profit") or 0.0),
-                "calculated_margin": float(r.get("calculated_margin") or 0.0),
-                "calculated_roi": float(r.get("calculated_roi") or 0.0),
+                "input_value": safe_float(r.get("input_value") or 0.0),
+                "calculated_price": safe_float(r.get("calculated_price") or 0.0),
+                "calculated_profit": safe_float(r.get("calculated_profit") or 0.0),
+                "calculated_margin": safe_float(r.get("calculated_margin") or 0.0),
+                "calculated_roi": safe_float(r.get("calculated_roi") or 0.0),
                 "created_at": str(r.get("created_at") or datetime.datetime.utcnow().isoformat())
             })
         return simulations
