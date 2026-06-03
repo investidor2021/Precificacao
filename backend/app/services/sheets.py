@@ -127,7 +127,7 @@ class GoogleSheetsService:
     def get_products(self) -> List[Dict[str, Any]]:
         def fetch():
             ws = self._get_worksheet("produtos")
-            records = ws.get_all_records()
+            records = ws.get_all_records(value_render_option="UNFORMATTED_VALUE")
             products = []
             for r in records:
                 products.append({
@@ -185,7 +185,7 @@ class GoogleSheetsService:
             product_dict.get("cubic_weight", 0.0),
             product_dict.get("unit_cost", 0.0)
         ]
-        ws.append_row(row_data)
+        ws.append_row(row_data, value_input_option="RAW")
         
         product_dict["created_at"] = datetime.datetime.utcnow().isoformat()
         product_dict["updated_at"] = datetime.datetime.utcnow().isoformat()
@@ -194,7 +194,7 @@ class GoogleSheetsService:
     def update_product(self, product_id: int, update_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         self._clear_cache()
         ws = self._get_worksheet("produtos")
-        records = ws.get_all_records()
+        records = ws.get_all_records(value_render_option="UNFORMATTED_VALUE")
         
         row_idx = -1
         current_product = None
@@ -225,14 +225,14 @@ class GoogleSheetsService:
             safe_float(current_product.get("unit_cost", 0.0))
         ]
         
-        ws.update(range_name=f"A{row_idx}:L{row_idx}", values=[row_data])
+        ws.update(range_name=f"A{row_idx}:L{row_idx}", values=[row_data], value_input_option="RAW")
         current_product["id"] = product_id
         return current_product
 
     def delete_product(self, product_id: int) -> bool:
         self._clear_cache()
         ws = self._get_worksheet("produtos")
-        records = ws.get_all_records()
+        records = ws.get_all_records(value_render_option="UNFORMATTED_VALUE")
         for i, r in enumerate(records):
             if safe_int(r.get("id") or 0) == product_id:
                 ws.delete_rows(i + 2)
@@ -243,7 +243,7 @@ class GoogleSheetsService:
     def get_packaging(self) -> List[Dict[str, Any]]:
         def fetch():
             ws = self._get_worksheet("embalagens")
-            records = ws.get_all_records()
+            records = ws.get_all_records(value_render_option="UNFORMATTED_VALUE")
             return [{
                 "id": safe_int(r.get("id") or 0),
                 "name": str(r.get("name")),
@@ -260,14 +260,14 @@ class GoogleSheetsService:
         new_id = max([p["id"] for p in pkgs] + [0]) + 1
         pkg_dict["id"] = new_id
         
-        ws.append_row([new_id, pkg_dict["name"], pkg_dict["cost"], pkg_dict["type"]])
+        ws.append_row([new_id, pkg_dict["name"], pkg_dict["cost"], pkg_dict["type"]], value_input_option="RAW")
         pkg_dict["created_at"] = datetime.datetime.utcnow().isoformat()
         return pkg_dict
 
     def delete_packaging(self, pkg_id: int) -> bool:
         self._clear_cache()
         ws = self._get_worksheet("embalagens")
-        records = ws.get_all_records()
+        records = ws.get_all_records(value_render_option="UNFORMATTED_VALUE")
         for i, r in enumerate(records):
             if safe_int(r.get("id") or 0) == pkg_id:
                 ws.delete_rows(i + 2)
@@ -278,7 +278,7 @@ class GoogleSheetsService:
     def get_operational_costs(self) -> List[Dict[str, Any]]:
         def fetch():
             ws = self._get_worksheet("custos_operacionais")
-            records = ws.get_all_records()
+            records = ws.get_all_records(value_render_option="UNFORMATTED_VALUE")
             return [{
                 "id": safe_int(r.get("id") or 0),
                 "name": str(r.get("name")),
@@ -295,14 +295,14 @@ class GoogleSheetsService:
         new_id = max([o["id"] for o in ops] + [0]) + 1
         op_dict["id"] = new_id
         
-        ws.append_row([new_id, op_dict["name"], op_dict["amount"], op_dict["type"]])
+        ws.append_row([new_id, op_dict["name"], op_dict["amount"], op_dict["type"]], value_input_option="RAW")
         op_dict["created_at"] = datetime.datetime.utcnow().isoformat()
         return op_dict
 
     def delete_operational_cost(self, op_id: int) -> bool:
         self._clear_cache()
         ws = self._get_worksheet("custos_operacionais")
-        records = ws.get_all_records()
+        records = ws.get_all_records(value_render_option="UNFORMATTED_VALUE")
         for i, r in enumerate(records):
             if safe_int(r.get("id") or 0) == op_id:
                 ws.delete_rows(i + 2)
@@ -313,7 +313,7 @@ class GoogleSheetsService:
     def get_ml_config(self) -> Dict[str, Any]:
         def fetch():
             ws = self._get_worksheet("config_ml")
-            records = ws.get_all_records()
+            records = ws.get_all_records(value_render_option="UNFORMATTED_VALUE")
             if not records:
                 return {
                     "id": 1,
@@ -349,7 +349,7 @@ class GoogleSheetsService:
             cfg["tax_rate"],
             cfg["shipping_subsidy_rate"]
         ]
-        ws.update(range_name="A2:F2", values=[row_values])
+        ws.update(range_name="A2:F2", values=[row_values], value_input_option="RAW")
         cfg["id"] = 1
         cfg["is_active"] = True
         return cfg
@@ -357,7 +357,7 @@ class GoogleSheetsService:
     def get_shopee_config(self) -> Dict[str, Any]:
         def fetch():
             ws = self._get_worksheet("config_shopee")
-            records = ws.get_all_records()
+            records = ws.get_all_records(value_render_option="UNFORMATTED_VALUE")
             if not records:
                 return {
                     "id": 1,
@@ -393,7 +393,7 @@ class GoogleSheetsService:
             "TRUE" if cfg["has_free_shipping_program"] else "FALSE",
             "TRUE" if cfg["has_cashback_program"] else "FALSE"
         ]
-        ws.update(range_name="A2:F2", values=[row_values])
+        ws.update(range_name="A2:F2", values=[row_values], value_input_option="RAW")
         cfg["id"] = 1
         cfg["is_active"] = True
         return cfg
@@ -402,7 +402,7 @@ class GoogleSheetsService:
     def get_simulations(self) -> List[Dict[str, Any]]:
         def fetch():
             ws = self._get_worksheet("simulacoes")
-            records = ws.get_all_records()
+            records = ws.get_all_records(value_render_option="UNFORMATTED_VALUE")
             simulations = []
             for i, r in enumerate(records):
                 simulations.append({
@@ -437,7 +437,7 @@ class GoogleSheetsService:
             sim_dict["calculated_roi"],
             created_at
         ]
-        ws.append_row(row_values)
+        ws.append_row(row_values, value_input_option="RAW")
         sim_dict["id"] = 999
         sim_dict["created_at"] = created_at
         return sim_dict
