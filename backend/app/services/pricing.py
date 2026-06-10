@@ -161,6 +161,7 @@ async def simulate_pricing_engine(sheets_db, request: SimulatorRequest) -> Simul
         r_service = (shopee_config["service_fee_rate"] / 100.0) if shopee_config["has_free_shipping_program"] else 0.0
         r_trans = shopee_config["transaction_fee_rate"] / 100.0
         r_tax = shopee_config["tax_rate"] / 100.0
+        fixed_fee = shopee_config.get("fixed_fee", 3.0)
         
         shipping_cost = request.shipping_override if request.shipping_override is not None else 0.0
         total_rate = r_comm + r_service + r_trans + r_tax
@@ -171,7 +172,7 @@ async def simulate_pricing_engine(sheets_db, request: SimulatorRequest) -> Simul
             if base_fee > 100.0:
                 base_fee = 100.0
             trans_fee = p * r_trans
-            fees = base_fee + trans_fee
+            fees = base_fee + trans_fee + fixed_fee
             tax = p * r_tax
             profit = p - unit_cost - fees - shipping_cost - tax
             margin = (profit / p) * 100.0 if p > 0 else 0.0
@@ -186,10 +187,10 @@ async def simulate_pricing_engine(sheets_db, request: SimulatorRequest) -> Simul
             m = request.input_value / 100.0
             denom = 1.0 - total_rate - m
             if denom > 0:
-                p_nocap = (unit_cost + shipping_cost) / denom
+                p_nocap = (unit_cost + fixed_fee + shipping_cost) / denom
                 if (p_nocap * (r_comm + r_service)) > 100.0:
                     denom_cap = 1.0 - r_trans - r_tax - m
-                    calculated_price = (unit_cost + 100.0 + shipping_cost) / denom_cap if denom_cap > 0 else p_nocap
+                    calculated_price = (unit_cost + 100.0 + fixed_fee + shipping_cost) / denom_cap if denom_cap > 0 else p_nocap
                 else:
                     calculated_price = p_nocap
             else:
@@ -198,10 +199,10 @@ async def simulate_pricing_engine(sheets_db, request: SimulatorRequest) -> Simul
             l_rs = request.input_value
             denom = 1.0 - total_rate
             if denom > 0:
-                p_nocap = (unit_cost + shipping_cost + l_rs) / denom
+                p_nocap = (unit_cost + fixed_fee + shipping_cost + l_rs) / denom
                 if (p_nocap * (r_comm + r_service)) > 100.0:
                     denom_cap = 1.0 - r_trans - r_tax
-                    calculated_price = (unit_cost + 100.0 + shipping_cost + l_rs) / denom_cap if denom_cap > 0 else p_nocap
+                    calculated_price = (unit_cost + 100.0 + fixed_fee + shipping_cost + l_rs) / denom_cap if denom_cap > 0 else p_nocap
                 else:
                     calculated_price = p_nocap
             else:
@@ -209,10 +210,10 @@ async def simulate_pricing_engine(sheets_db, request: SimulatorRequest) -> Simul
                 
         # Calculate breakeven
         denom_be = 1.0 - total_rate
-        be_nocap = (unit_cost + shipping_cost) / denom_be if denom_be > 0 else 0.0
+        be_nocap = (unit_cost + fixed_fee + shipping_cost) / denom_be if denom_be > 0 else 0.0
         if (be_nocap * (r_comm + r_service)) > 100.0:
             denom_cap = 1.0 - r_trans - r_tax
-            breakeven_price = (unit_cost + 100.0 + shipping_cost) / denom_cap if denom_cap > 0 else be_nocap
+            breakeven_price = (unit_cost + 100.0 + fixed_fee + shipping_cost) / denom_cap if denom_cap > 0 else be_nocap
         else:
             breakeven_price = be_nocap
             

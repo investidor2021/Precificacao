@@ -108,6 +108,7 @@ class ShopeeConfigBase(BaseModel):
     service_fee_rate: float
     transaction_fee_rate: float
     tax_rate: float
+    fixed_fee: float
     has_free_shipping_program: bool
     has_cashback_program: bool
 

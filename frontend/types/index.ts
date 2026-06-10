@@ -56,6 +56,7 @@ export interface ShopeeConfig {
   service_fee_rate: number;
   transaction_fee_rate: number;
   tax_rate: number;
+  fixed_fee: number;
   has_free_shipping_program: boolean;
   has_cashback_program: boolean;
   is_active: boolean;

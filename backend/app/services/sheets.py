@@ -97,7 +97,7 @@ class GoogleSheetsService:
             "embalagens": ["id", "name", "cost", "type"],
             "custos_operacionais": ["id", "name", "amount", "type"],
             "config_ml": ["classic_commission_rate", "premium_commission_rate", "fixed_fee_threshold", "fixed_fee", "tax_rate", "shipping_subsidy_rate"],
-            "config_shopee": ["commission_rate", "service_fee_rate", "transaction_fee_rate", "tax_rate", "has_free_shipping_program", "has_cashback_program"],
+            "config_shopee": ["commission_rate", "service_fee_rate", "transaction_fee_rate", "tax_rate", "fixed_fee", "has_free_shipping_program", "has_cashback_program"],
             "simulacoes": ["product_sku", "product_name", "marketplace", "mode", "input_value", "calculated_price", "calculated_profit", "calculated_margin", "calculated_roi", "created_at"],
             "kits": ["id", "sku", "name", "category", "weight", "height", "width", "length"],
             "kit_items": ["id", "kit_id", "product_id", "quantity"]
@@ -113,12 +113,19 @@ class GoogleSheetsService:
                 if tab_name == "config_ml":
                     ws.append_row([11.5, 16.5, 79.0, 6.0, 4.0, 50.0])
                 elif tab_name == "config_shopee":
-                    ws.append_row([14.0, 6.0, 2.0, 4.0, "TRUE", "FALSE"])
+                    ws.append_row([14.0, 6.0, 2.0, 4.0, 3.0, "TRUE", "FALSE"])
             else:
                 ws = self.spreadsheet.worksheet(tab_name)
                 row1 = ws.row_values(1)
                 if not row1:
                     ws.append_row(headers)
+                else:
+                    # Self-heal missing headers in Google Sheet
+                    missing_headers = [h for h in headers if h not in row1]
+                    if missing_headers:
+                        import gspread.utils
+                        range_name = f"A1:{gspread.utils.rowcol_to_a1(1, len(headers))}"
+                        ws.update(range_name=range_name, values=[headers])
 
         # Seed default packaging if empty
         try:
@@ -384,6 +391,7 @@ class GoogleSheetsService:
                     "service_fee_rate": 6.0,
                     "transaction_fee_rate": 2.0,
                     "tax_rate": 4.0,
+                    "fixed_fee": 3.0,
                     "has_free_shipping_program": True,
                     "has_cashback_program": False,
                     "is_active": True
@@ -395,6 +403,7 @@ class GoogleSheetsService:
                 "service_fee_rate": safe_float(r.get("service_fee_rate") or 6.0),
                 "transaction_fee_rate": safe_float(r.get("transaction_fee_rate") or 2.0),
                 "tax_rate": safe_float(r.get("tax_rate") or 4.0),
+                "fixed_fee": safe_float(r.get("fixed_fee") if r.get("fixed_fee") is not None else 3.0),
                 "has_free_shipping_program": str(r.get("has_free_shipping_program")).upper() == "TRUE",
                 "has_cashback_program": str(r.get("has_cashback_program")).upper() == "TRUE",
                 "is_active": True
@@ -409,10 +418,11 @@ class GoogleSheetsService:
             cfg["service_fee_rate"],
             cfg["transaction_fee_rate"],
             cfg["tax_rate"],
+            cfg["fixed_fee"],
             "TRUE" if cfg["has_free_shipping_program"] else "FALSE",
             "TRUE" if cfg["has_cashback_program"] else "FALSE"
         ]
-        ws.update(range_name="A2:F2", values=[row_values], value_input_option="RAW")
+        ws.update(range_name="A2:G2", values=[row_values], value_input_option="RAW")
         cfg["id"] = 1
         cfg["is_active"] = True
         return cfg

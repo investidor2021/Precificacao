@@ -34,6 +34,7 @@ export default function SettingsPage() {
     transaction_fee_rate: '',
     service_fee_rate: '',
     tax_rate: '',
+    fixed_fee: '',
     has_free_shipping_program: true,
     has_cashback_program: false
   });
@@ -73,6 +74,7 @@ export default function SettingsPage() {
         transaction_fee_rate: shopeeRes.transaction_fee_rate.toString(),
         service_fee_rate: shopeeRes.service_fee_rate.toString(),
         tax_rate: shopeeRes.tax_rate.toString(),
+        fixed_fee: (shopeeRes.fixed_fee ?? 3.0).toString(),
         has_free_shipping_program: shopeeRes.has_free_shipping_program,
         has_cashback_program: shopeeRes.has_cashback_program
       });
@@ -120,6 +122,7 @@ export default function SettingsPage() {
         transaction_fee_rate: parseFormFloat(shopeeForm.transaction_fee_rate),
         service_fee_rate: parseFormFloat(shopeeForm.service_fee_rate),
         tax_rate: parseFormFloat(shopeeForm.tax_rate),
+        fixed_fee: parseFormFloat(shopeeForm.fixed_fee),
         has_free_shipping_program: shopeeForm.has_free_shipping_program,
         has_cashback_program: shopeeForm.has_cashback_program
       };
@@ -286,7 +289,7 @@ export default function SettingsPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <div className="space-y-1">
                   <label className="text-xs text-slate-400 font-bold uppercase">Taxa de Serviço (%)</label>
                   <input
@@ -297,11 +300,20 @@ export default function SettingsPage() {
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-xs text-slate-400 font-bold uppercase">Imposto Simples (%)</label>
+                  <label className="text-xs text-slate-400 font-bold uppercase">Imposto (%)</label>
                   <input
                     type="text" required
                     value={shopeeForm.tax_rate}
                     onChange={(e) => setShopeeForm({ ...shopeeForm, tax_rate: e.target.value })}
+                    className="w-full px-3 py-2 bg-transparent border border-slate-200 dark:border-slate-800 rounded-lg text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-slate-400 font-bold uppercase">Taxa Fixa (R$)</label>
+                  <input
+                    type="text" required
+                    value={shopeeForm.fixed_fee}
+                    onChange={(e) => setShopeeForm({ ...shopeeForm, fixed_fee: e.target.value })}
                     className="w-full px-3 py-2 bg-transparent border border-slate-200 dark:border-slate-800 rounded-lg text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   />
                 </div>
