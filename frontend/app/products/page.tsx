@@ -47,6 +47,11 @@ export default function ProductsPage() {
     weight: '', height: '', width: '', length: ''
   });
 
+  // Custom states for pricing input modes (Unit vs Pack/Kit)
+  const [pricingMode, setPricingMode] = useState<'unit' | 'pack'>('unit');
+  const [packTotalCost, setPackTotalCost] = useState<string>('');
+  const [packQuantity, setPackQuantity] = useState<string>('10');
+
   const [kitForm, setKitForm] = useState({
     sku: '', name: '', category: '', weight: '', height: '', width: '', length: '',
     items: [] as { product_id: number; quantity: number }[]
@@ -152,6 +157,9 @@ export default function ProductsPage() {
       sku: '', name: '', category: '', purchase_cost: '', quantity_acquired: '1',
       weight: '', height: '', width: '', length: ''
     });
+    setPricingMode('unit');
+    setPackTotalCost('');
+    setPackQuantity('10');
     setIsEditing(false);
     setEditingProductId(null);
   };
@@ -174,6 +182,9 @@ export default function ProductsPage() {
       width: product.width.toString(),
       length: product.length.toString()
     });
+    setPricingMode('unit');
+    setPackTotalCost('');
+    setPackQuantity('10');
     setEditingProductId(product.id);
     setIsEditing(true);
     setShowProductModal(true);
@@ -183,12 +194,22 @@ export default function ProductsPage() {
   const handleProductFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      let finalPurchaseCost = parseFormFloat(productForm.purchase_cost);
+      let finalQuantity = parseFormInt(productForm.quantity_acquired) || 1;
+
+      if (pricingMode === 'pack') {
+        const totalCost = parseFormFloat(packTotalCost);
+        const qtyInPack = parseFormInt(packQuantity) || 1;
+        finalPurchaseCost = totalCost / qtyInPack;
+        finalQuantity = qtyInPack;
+      }
+
       const payload = {
         sku: productForm.sku,
         name: productForm.name,
         category: productForm.category,
-        purchase_cost: parseFormFloat(productForm.purchase_cost),
-        quantity_acquired: parseFormInt(productForm.quantity_acquired) || 1,
+        purchase_cost: finalPurchaseCost,
+        quantity_acquired: finalQuantity,
         weight: parseFormFloat(productForm.weight),
         height: parseFormFloat(productForm.height),
         width: parseFormFloat(productForm.width),
@@ -432,6 +453,28 @@ export default function ProductsPage() {
                 </button>
               </div>
 
+              {/* Cards de Resumo de Estoque */}
+              {products.length > 0 && (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-slate-50/50 dark:bg-slate-900/10 p-4 rounded-2xl border border-slate-200 dark:border-slate-800">
+                  <div className="p-4 bg-white dark:bg-slate-950 rounded-xl border border-slate-150 dark:border-slate-800/80 shadow-xs">
+                    <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">Total de SKUs</span>
+                    <p className="text-2xl font-black text-slate-800 dark:text-white mt-1">{products.length}</p>
+                  </div>
+                  <div className="p-4 bg-white dark:bg-slate-950 rounded-xl border border-slate-150 dark:border-slate-800/80 shadow-xs">
+                    <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">Total de Unidades</span>
+                    <p className="text-2xl font-black text-slate-800 dark:text-white mt-1">
+                      {products.reduce((acc, p) => acc + p.quantity_acquired, 0)} un
+                    </p>
+                  </div>
+                  <div className="p-4 bg-white dark:bg-slate-950 rounded-xl border border-slate-150 dark:border-slate-800/80 shadow-xs">
+                    <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">Custo Total de Compra</span>
+                    <p className="text-2xl font-black text-emerald-500 mt-1">
+                      R$ {products.reduce((acc, p) => acc + (p.purchase_cost * p.quantity_acquired), 0).toFixed(2)}
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {products.length === 0 ? (
                 <div className="text-center p-12 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-850 rounded-2xl">
                   <Package className="w-12 h-12 text-slate-500 mx-auto mb-3" />
@@ -445,7 +488,9 @@ export default function ProductsPage() {
                         <th className="px-6 py-4">SKU</th>
                         <th className="px-6 py-4">Nome</th>
                         <th className="px-6 py-4">Categoria</th>
-                        <th className="px-6 py-4">Custo Compra</th>
+                        <th className="px-6 py-4">Qtd. Adquirida</th>
+                        <th className="px-6 py-4">Custo Unitário</th>
+                        <th className="px-6 py-4">Custo Total</th>
                         <th className="px-6 py-4">Custo Carregado</th>
                         <th className="px-6 py-4">Medidas (CxLxA)</th>
                         <th className="px-6 py-4">Peso Cúbico</th>
@@ -458,7 +503,9 @@ export default function ProductsPage() {
                           <td className="px-6 py-4 font-mono font-bold text-slate-600 dark:text-slate-400">{p.sku}</td>
                           <td className="px-6 py-4 font-medium dark:text-white">{p.name}</td>
                           <td className="px-6 py-4 text-slate-500">{p.category || '—'}</td>
+                          <td className="px-6 py-4 text-slate-600 dark:text-slate-400 font-bold">{p.quantity_acquired}</td>
                           <td className="px-6 py-4 text-slate-600 dark:text-slate-400">R$ {p.purchase_cost.toFixed(2)}</td>
+                          <td className="px-6 py-4 font-bold text-emerald-500">R$ {(p.purchase_cost * p.quantity_acquired).toFixed(2)}</td>
                           <td className="px-6 py-4 font-semibold text-emerald-500">R$ {p.unit_cost.toFixed(2)}</td>
                           <td className="px-6 py-4 text-slate-500">
                             {p.length}x{p.width}x{p.height} cm
@@ -483,6 +530,24 @@ export default function ProductsPage() {
                         </tr>
                       ))}
                     </tbody>
+                    <tfoot className="border-t border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40 text-sm font-semibold">
+                      <tr className="text-slate-700 dark:text-slate-200 font-bold">
+                        <td className="px-6 py-4">Total</td>
+                        <td className="px-6 py-4"></td>
+                        <td className="px-6 py-4"></td>
+                        <td className="px-6 py-4 text-slate-800 dark:text-slate-100">
+                          {products.reduce((acc, p) => acc + p.quantity_acquired, 0)} un
+                        </td>
+                        <td className="px-6 py-4"></td>
+                        <td className="px-6 py-4 text-emerald-500 font-black">
+                          R$ {products.reduce((acc, p) => acc + (p.purchase_cost * p.quantity_acquired), 0).toFixed(2)}
+                        </td>
+                        <td className="px-6 py-4"></td>
+                        <td className="px-6 py-4"></td>
+                        <td className="px-6 py-4"></td>
+                        <td className="px-6 py-4"></td>
+                      </tr>
+                    </tfoot>
                   </table>
                 </div>
               )}
@@ -714,26 +779,84 @@ export default function ProductsPage() {
                     className="w-full px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="space-y-1">
-                    <label className="text-xs text-slate-400 font-bold uppercase">Custo Compra (R$)</label>
-                    <input
-                      type="text" required placeholder="Ex: 10,50"
-                      value={productForm.purchase_cost}
-                      onChange={(e) => setProductForm({ ...productForm, purchase_cost: e.target.value })}
-                      className="w-full px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-xs text-slate-400 font-bold uppercase">Qtd. Adquirida</label>
-                    <input
-                      type="text" required placeholder="Ex: 1"
-                      value={productForm.quantity_acquired}
-                      onChange={(e) => setProductForm({ ...productForm, quantity_acquired: e.target.value })}
-                      className="w-full px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                    />
+                {/* Cost Input Mode Selection */}
+                <div className="col-span-1 md:col-span-2 space-y-1.5">
+                  <label className="text-xs text-slate-400 font-bold uppercase">Modo de Custo de Compra</label>
+                  <div className="flex space-x-2 p-1 bg-slate-100 dark:bg-slate-900 rounded-lg w-full">
+                    <button
+                      type="button"
+                      onClick={() => setPricingMode('unit')}
+                      className={`flex-1 py-2 rounded-md text-xs font-bold transition ${
+                        pricingMode === 'unit'
+                          ? 'bg-white dark:bg-slate-850 text-emerald-500 shadow-xs'
+                          : 'text-slate-500 hover:text-slate-700'
+                      }`}
+                    >
+                      Preço Unitário
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPricingMode('pack')}
+                      className={`flex-1 py-2 rounded-md text-xs font-bold transition ${
+                        pricingMode === 'pack'
+                          ? 'bg-white dark:bg-slate-850 text-emerald-500 shadow-xs'
+                          : 'text-slate-500 hover:text-slate-700'
+                      }`}
+                    >
+                      Preço do Lote / Kit
+                    </button>
                   </div>
                 </div>
+
+                {pricingMode === 'unit' ? (
+                  <div className="col-span-1 md:col-span-2 grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="text-xs text-slate-400 font-bold uppercase">Custo Compra Unitário (R$)</label>
+                      <input
+                        type="text" required placeholder="Ex: 10,50"
+                        value={productForm.purchase_cost}
+                        onChange={(e) => setProductForm({ ...productForm, purchase_cost: e.target.value })}
+                        className="w-full px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs text-slate-400 font-bold uppercase">Qtd. Adquirida</label>
+                      <input
+                        type="text" required placeholder="Ex: 1"
+                        value={productForm.quantity_acquired}
+                        onChange={(e) => setProductForm({ ...productForm, quantity_acquired: e.target.value })}
+                        className="w-full px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="col-span-1 md:col-span-2 grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="text-xs text-slate-400 font-bold uppercase">Preço Total do Lote/Kit (R$)</label>
+                      <input
+                        type="text" required placeholder="Ex: 100,00"
+                        value={packTotalCost}
+                        onChange={(e) => setPackTotalCost(e.target.value)}
+                        className="w-full px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs text-slate-400 font-bold uppercase">Qtd. Unidades no Lote/Kit</label>
+                      <input
+                        type="text" required placeholder="Ex: 10"
+                        value={packQuantity}
+                        onChange={(e) => setPackQuantity(e.target.value)}
+                        className="w-full px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                      />
+                    </div>
+                    <div className="col-span-2 p-3 bg-emerald-500/5 border border-emerald-500/10 rounded-lg flex items-center justify-between text-xs mt-1">
+                      <span className="text-slate-400 font-semibold">Preço Unitário calculado para o cadastro:</span>
+                      <span className="font-bold text-emerald-500">
+                        R$ {((parseFormFloat(packTotalCost) / (parseFormInt(packQuantity) || 1)) || 0).toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="border-t border-slate-200 dark:border-slate-900 pt-6 space-y-4">
