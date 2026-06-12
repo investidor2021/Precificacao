@@ -104,6 +104,8 @@ export const api = {
     shipping_override?: number;
     is_kit?: boolean;
     free_shipping?: boolean;
+    category?: string;
+    packaging_override_id?: number | null;
   }) => request<any>('/api/simulations/simulate', {
     method: 'POST',
     body: JSON.stringify(data),

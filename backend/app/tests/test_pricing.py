@@ -187,8 +187,8 @@ async def test_kit_simulation_pricing_free_shipping_under_79():
     assert res.price == 75.0
     # Shipping cost in 2026 Verde table under threshold (<79) for 0.5kg is 5.95
     assert res.shipping_cost == 5.95
-    # Net profit: 75 - 40 - 8.62 (comm) - 5.95 (ship) - 6 (fixed) - 3 (tax) = 11.43
-    assert res.net_profit == 11.43
+    # Net profit: 75 - 40 - 8.62 (comm) - 5.95 (ship) - 6.75 (fixed) - 3 (tax) = 10.68
+    assert res.net_profit == 10.68
 
 
 @pytest.mark.asyncio
@@ -243,7 +243,7 @@ async def test_simulate_pricing_engine_breakdown():
     assert res.variable_operational_cost == 1.50
     assert res.unit_cost == 55.0
     assert res.commission_percent_val == round(70.0 * 0.115, 2)
-    assert res.fixed_fee_val == 6.0
+    assert res.fixed_fee_val == 6.75
     assert res.shipping_cost == 0.0
     assert res.raw_shipping_val == 0.0
     assert res.shipping_discount_val == 0.0
@@ -305,6 +305,73 @@ def test_update_packaging_mock():
     assert res["id"] == 1
     assert res["name"] == "Envelope Updated"
     assert res["cost"] == 1.20
+
+
+@pytest.mark.asyncio
+async def test_simulate_pricing_categories_and_packaging_override():
+    sheets_db = MagicMock()
+    
+    product = {
+        "id": 1,
+        "sku": "SKU-CAT-TEST",
+        "name": "Cat Test Product",
+        "purchase_cost": 50.0,
+        "weight": 0.5,
+        "height": 10,
+        "width": 10,
+        "length": 10,
+        "category": "Outros"
+    }
+    sheets_db.get_product.return_value = product
+    
+    pkgs = [
+        {"id": 10, "name": "Box 1 12x12x12", "cost": 2.00, "type": "box"},
+        {"id": 20, "name": "Box 2 20x20x20", "cost": 5.00, "type": "box"}
+    ]
+    sheets_db.get_packaging.return_value = pkgs
+    sheets_db.get_operational_costs.return_value = []
+    
+    sheets_db.get_ml_config.return_value = {
+        "classic_commission_rate": 11.5,
+        "premium_commission_rate": 16.5,
+        "fixed_fee_threshold": 79.0,
+        "fixed_fee": 6.0,
+        "tax_rate": 4.0,
+        "shipping_subsidy_rate": 50.0
+    }
+    
+    req_sapato = SimulatorRequest(
+        product_id=1,
+        marketplace="mercado_livre_classic",
+        mode=1,
+        input_value=100.0,
+        category="sapato"
+    )
+    res_sapato = await simulate_pricing_engine(sheets_db, req_sapato)
+    assert res_sapato.commission_percent_val == 11.50
+    assert res_sapato.selected_packaging_id == 10
+    
+    req_vestuario = SimulatorRequest(
+        product_id=1,
+        marketplace="mercado_livre_classic",
+        mode=1,
+        input_value=100.0,
+        category="vestuario"
+    )
+    res_vestuario = await simulate_pricing_engine(sheets_db, req_vestuario)
+    assert res_vestuario.commission_percent_val == 12.50
+    
+    req_override = SimulatorRequest(
+        product_id=1,
+        marketplace="mercado_livre_classic",
+        mode=1,
+        input_value=100.0,
+        packaging_override_id=20
+    )
+    res_override = await simulate_pricing_engine(sheets_db, req_override)
+    assert res_override.selected_packaging_id == 20
+    assert res_override.packaging_cost == 5.00
+
 
 
 

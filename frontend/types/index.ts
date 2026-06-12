@@ -98,6 +98,9 @@ export interface SimulatorResult {
   fixed_fee_val: number;
   raw_shipping_val: number;
   shipping_discount_val: number;
+  selected_packaging_id?: number | null;
+  selected_packaging_name?: string;
+  tax_rate?: number;
 }
 
 export interface MarketplaceComparisonDetails {

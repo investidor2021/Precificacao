@@ -10,58 +10,69 @@ def parse_dimensions_from_name(name: str) -> list:
         return [float(p.strip()) for p in parts if p.strip()]
     return []
 
-def calculate_packaging_cost(product: Dict[str, Any], packagings: list) -> float:
+def select_packaging_item(product: Dict[str, Any], packagings: list, override_id: Any = None) -> Dict[str, Any]:
     containers = []
-    accessories_cost = 0.0
+    accessories = []
     
     for pkg in packagings:
         pkg_type = pkg.get("type", "")
-        name = pkg.get("name", "")
-        cost = pkg.get("cost", 0.0)
-        
         if pkg_type in ["box", "envelope"]:
-            dims = parse_dimensions_from_name(name)
-            containers.append({
-                "cost": cost,
-                "type": pkg_type,
-                "dims": dims
-            })
+            containers.append(pkg)
         else:
-            accessories_cost += cost
+            accessories.append(pkg)
             
-    if not containers:
-        return accessories_cost
-        
-    h = product.get("height", 0.0)
-    w = product.get("width", 0.0)
-    l = product.get("length", 0.0)
-    p_dims = sorted([h, w, l])
+    selected_container = None
     
-    if p_dims[2] > 0:
-        fitting_containers = []
-        for c in containers:
-            c_dims = c["dims"]
-            if not c_dims:
-                continue
-            if c["type"] == "envelope" and len(c_dims) == 2:
-                c_dims_sorted = sorted([2.0] + c_dims)
-            else:
-                c_dims_sorted = sorted(c_dims)
-                while len(c_dims_sorted) < 3:
-                    c_dims_sorted.insert(0, 1.0)
-            
-            if p_dims[0] <= c_dims_sorted[0] and p_dims[1] <= c_dims_sorted[1] and p_dims[2] <= c_dims_sorted[2]:
-                fitting_containers.append(c)
+    if override_id is not None:
+        try:
+            target_id = int(float(str(override_id)))
+            for c in containers:
+                if c.get("id") == target_id:
+                    selected_container = c
+                    break
+        except (ValueError, TypeError):
+            pass
                 
-        if fitting_containers:
-            cheapest = min(fitting_containers, key=lambda x: x["cost"])
-            return cheapest["cost"] + accessories_cost
-        else:
-            most_expensive = max(containers, key=lambda x: x["cost"])
-            return most_expensive["cost"] + accessories_cost
+    if not selected_container and containers:
+        h = product.get("height", 0.0)
+        w = product.get("width", 0.0)
+        l = product.get("length", 0.0)
+        p_dims = sorted([h, w, l])
+        
+        if p_dims[2] > 0:
+            fitting_containers = []
+            for c in containers:
+                dims = parse_dimensions_from_name(c.get("name", ""))
+                if not dims:
+                    continue
+                if c.get("type") == "envelope" and len(dims) == 2:
+                    c_dims_sorted = sorted([2.0] + dims)
+                else:
+                    c_dims_sorted = sorted(dims)
+                    while len(c_dims_sorted) < 3:
+                        c_dims_sorted.insert(0, 1.0)
+                
+                if p_dims[0] <= c_dims_sorted[0] and p_dims[1] <= c_dims_sorted[1] and p_dims[2] <= c_dims_sorted[2]:
+                    fitting_containers.append(c)
             
-    cheapest = min(containers, key=lambda x: x["cost"])
-    return cheapest["cost"] + accessories_cost
+            if fitting_containers:
+                selected_container = min(fitting_containers, key=lambda x: x["cost"])
+            else:
+                selected_container = max(containers, key=lambda x: x["cost"])
+        else:
+            selected_container = min(containers, key=lambda x: x["cost"])
+            
+    container_cost = selected_container["cost"] if selected_container else 0.0
+    accessories_cost = sum(a["cost"] for a in accessories)
+    
+    return {
+        "container": selected_container,
+        "total_cost": container_cost + accessories_cost,
+        "accessories": accessories
+    }
+
+def calculate_packaging_cost(product: Dict[str, Any], packagings: list) -> float:
+    return select_packaging_item(product, packagings)["total_cost"]
 
 async def calculate_cubic_weight(height: float, width: float, length: float) -> float:
     # Cubic weight formula: (H * W * L) / 6000
@@ -72,7 +83,8 @@ async def calculate_cubic_weight(height: float, width: float, length: float) -> 
 async def get_loaded_unit_cost(sheets_db, product: Dict[str, Any]) -> float:
     # Fetch packaging from sheets
     packagings = sheets_db.get_packaging()
-    total_packaging_cost = calculate_packaging_cost(product, packagings)
+    pkg_res = select_packaging_item(product, packagings)
+    total_packaging_cost = pkg_res["total_cost"]
     
     # Fetch operational costs from sheets
     op_costs = sheets_db.get_operational_costs()
@@ -155,7 +167,11 @@ async def simulate_pricing_engine(sheets_db, request: SimulatorRequest) -> Simul
         
     # Calculate detailed cost components
     packagings = sheets_db.get_packaging()
-    packaging_cost = calculate_packaging_cost(product, packagings)
+    # Resolve custom packaging if overridden in request
+    req_pkg_override = getattr(request, "packaging_override_id", None)
+    pkg_res = select_packaging_item(product, packagings, req_pkg_override)
+    packaging_cost = pkg_res["total_cost"]
+    selected_pkg = pkg_res["container"]
     
     op_costs = sheets_db.get_operational_costs()
     fixed_operational_monthly = sum(oc["amount"] for oc in op_costs if oc["type"] == "fixed")
@@ -176,16 +192,33 @@ async def simulate_pricing_engine(sheets_db, request: SimulatorRequest) -> Simul
     if request.marketplace.startswith("mercado_livre"):
         # Fetch ML Config
         ml_config = sheets_db.get_ml_config()
-            
-        commission_rate = (
-            ml_config["premium_commission_rate"] if "premium" in request.marketplace 
-            else ml_config["classic_commission_rate"]
-        )
         
+        # Resolve category
+        req_cat = getattr(request, "category", None)
+        if not req_cat:
+            req_cat = product.get("category", "")
+            
+        is_premium = "premium" in request.marketplace
+        default_rate = ml_config["premium_commission_rate"] if is_premium else ml_config["classic_commission_rate"]
+        
+        if req_cat:
+            cat_lower = req_cat.lower().strip()
+            if any(x in cat_lower for x in ["sapato", "calçado", "calçado", "brinquedo"]):
+                commission_rate = 16.5 if is_premium else 11.5
+            elif any(x in cat_lower for x in ["vestuario", "roupa", "moda", "acessório"]):
+                commission_rate = 17.5 if is_premium else 12.5
+            elif any(x in cat_lower for x in ["eletronico", "celular", "computador", "tecnologia"]):
+                commission_rate = 15.5 if is_premium else 10.5
+            elif any(x in cat_lower for x in ["livro"]):
+                commission_rate = 15.0 if is_premium else 10.0
+            else:
+                commission_rate = default_rate
+        else:
+            commission_rate = default_rate
+            
         r_comm = commission_rate / 100.0
         r_tax = ml_config["tax_rate"] / 100.0
         fixed_fee_threshold = ml_config["fixed_fee_threshold"]
-        fixed_fee = ml_config["fixed_fee"]
         
         # Determine reputation and select appropriate fee
         req_rep = getattr(request, "reputation", None)
@@ -215,13 +248,27 @@ async def simulate_pricing_engine(sheets_db, request: SimulatorRequest) -> Simul
                 shipping_cost_under = subsidized_shipping_under
             else:
                 shipping_cost_under = 0.0 # Under 79, buyer pays
-            
+                
+        def get_ml_variable_fixed_fee(p: float) -> float:
+            if p >= fixed_fee_threshold:
+                return 0.0
+            if p < 12.50:
+                return round(p * 0.50, 2)
+            elif p < 29.00:
+                return 6.25
+            elif p < 50.00:
+                return 6.50
+            else:
+                return 6.75
+                
         def eval_ml_price(p: float):
             p = max(p, 0.01)
+            cvff = get_ml_variable_fixed_fee(p)
+            
             if p < fixed_fee_threshold:
-                fee = (p * r_comm) + fixed_fee
+                fee = (p * r_comm) + cvff
                 commission_percent_val = p * r_comm
-                fixed_fee_val = fixed_fee
+                fixed_fee_val = cvff
                 ship = shipping_cost_under
             else:
                 fee = p * r_comm
@@ -250,46 +297,58 @@ async def simulate_pricing_engine(sheets_db, request: SimulatorRequest) -> Simul
                     else:
                         raw_shipping_val = raw_fee_bracket_over
                         shipping_discount_val = round(raw_fee_bracket_over - subsidized_shipping_over, 2)
-                    
+                        
             return p, profit, margin, roi, markup, fee, ship, tax, commission_percent_val, fixed_fee_val, raw_shipping_val, shipping_discount_val
+
+        def solve_ml_price(target_margin: float = 0.0, target_profit: float = 0.0) -> float:
+            m = target_margin
+            tp = target_profit
             
-        def find_ml_breakeven():
-            # Try Region 1
-            denom1 = 1.0 - r_comm - r_tax
-            p1 = (unit_cost + fixed_fee + shipping_cost_under) / denom1 if denom1 > 0 else 0.0
-            if p1 < fixed_fee_threshold:
-                return round(p1, 2)
-            # Try Region 2
-            denom2 = 1.0 - r_comm - r_tax
-            p2 = (unit_cost + shipping_cost_over) / denom2 if denom2 > 0 else 0.0
-            return round(max(p2, fixed_fee_threshold), 2)
+            # Step 1: P < 12.50 (CVFF = P * 0.5)
+            denom1 = 1.0 - r_comm - r_tax - m - 0.5
+            if denom1 > 0:
+                p1 = (unit_cost + shipping_cost_under + tp) / denom1
+                if p1 < 12.50:
+                    return p1
+                    
+            # Step 2: 12.50 <= P < 29.00 (CVFF = 6.25)
+            denom2 = 1.0 - r_comm - r_tax - m
+            if denom2 > 0:
+                p2 = (unit_cost + 6.25 + shipping_cost_under + tp) / denom2
+                if 12.50 <= p2 < 29.00:
+                    return p2
+                    
+            # Step 3: 29.00 <= P < 50.00 (CVFF = 6.50)
+            if denom2 > 0:
+                p3 = (unit_cost + 6.50 + shipping_cost_under + tp) / denom2
+                if 29.00 <= p3 < 50.00:
+                    return p3
+                    
+            # Step 4: 50.00 <= P < 79.00 (CVFF = 6.75)
+            if denom2 > 0:
+                p4 = (unit_cost + 6.75 + shipping_cost_under + tp) / denom2
+                if 50.00 <= p4 < 79.00:
+                    return p4
+                    
+            # Step 5: P >= 79.00 (CVFF = 0.0)
+            if denom2 > 0:
+                p5 = (unit_cost + shipping_cost_over + tp) / denom2
+                return max(p5, 79.00)
+                
+            return 79.00
             
-        breakeven_price = find_ml_breakeven()
+        breakeven_price = solve_ml_price()
         
         calculated_price = 0.0
         if request.mode == 1:
             calculated_price = request.input_value
         elif request.mode == 2:
             m = request.input_value / 100.0
-            denom1 = 1.0 - r_comm - r_tax - m
-            p1 = (unit_cost + fixed_fee + shipping_cost_under) / denom1 if denom1 > 0 else 0.0
-            if p1 < fixed_fee_threshold:
-                calculated_price = p1
-            else:
-                denom2 = 1.0 - r_comm - r_tax - m
-                p2 = (unit_cost + shipping_cost_over) / denom2 if denom2 > 0 else 0.0
-                calculated_price = max(p2, fixed_fee_threshold)
+            calculated_price = solve_ml_price(target_margin=m)
         elif request.mode == 3:
             l_rs = request.input_value
-            denom1 = 1.0 - r_comm - r_tax
-            p1 = (unit_cost + fixed_fee + shipping_cost_under + l_rs) / denom1 if denom1 > 0 else 0.0
-            if p1 < fixed_fee_threshold:
-                calculated_price = p1
-            else:
-                denom2 = 1.0 - r_comm - r_tax
-                p2 = (unit_cost + shipping_cost_over + l_rs) / denom2 if denom2 > 0 else 0.0
-                calculated_price = max(p2, fixed_fee_threshold)
-                
+            calculated_price = solve_ml_price(target_profit=l_rs)
+            
         calculated_price = round(calculated_price, 2)
         price, net_profit, margin, roi, markup, fees, shipping, tax, comm_val, fix_val, raw_ship, ship_disc = eval_ml_price(calculated_price)
         
@@ -299,7 +358,7 @@ async def simulate_pricing_engine(sheets_db, request: SimulatorRequest) -> Simul
             margin=round(margin, 2),
             roi=round(roi, 2),
             markup=round(markup, 2),
-            breakeven_price=breakeven_price,
+            breakeven_price=round(breakeven_price, 2),
             marketplace_fees=round(fees, 2),
             shipping_cost=round(shipping, 2),
             tax_cost=round(tax, 2),
@@ -311,7 +370,10 @@ async def simulate_pricing_engine(sheets_db, request: SimulatorRequest) -> Simul
             commission_percent_val=round(comm_val, 2),
             fixed_fee_val=round(fix_val, 2),
             raw_shipping_val=round(raw_ship, 2),
-            shipping_discount_val=round(ship_disc, 2)
+            shipping_discount_val=round(ship_disc, 2),
+            selected_packaging_id=selected_pkg.get("id") if selected_pkg else None,
+            selected_packaging_name=selected_pkg.get("name", "") if selected_pkg else "",
+            tax_rate=ml_config["tax_rate"]
         )
         
     elif request.marketplace == "shopee":
@@ -398,7 +460,10 @@ async def simulate_pricing_engine(sheets_db, request: SimulatorRequest) -> Simul
             commission_percent_val=round(comm_val, 2),
             fixed_fee_val=round(fix_val, 2),
             raw_shipping_val=round(shipping, 2),
-            shipping_discount_val=0.0
+            shipping_discount_val=0.0,
+            selected_packaging_id=selected_pkg.get("id") if selected_pkg else None,
+            selected_packaging_name=selected_pkg.get("name", "") if selected_pkg else "",
+            tax_rate=shopee_config["tax_rate"]
         )
     else:
         raise ValueError("Invalid marketplace")

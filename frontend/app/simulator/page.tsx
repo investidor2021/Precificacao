@@ -14,11 +14,12 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { api } from '@/lib/api';
-import { Product, SimulatorResult } from '@/types';
+import { Product, SimulatorResult, Packaging } from '@/types';
 
 export default function SimulatorPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [kits, setKits] = useState<any[]>([]);
+  const [packagings, setPackagings] = useState<Packaging[]>([]);
   const [selectedItemKey, setSelectedItemKey] = useState<string>('');
   const [marketplace, setMarketplace] = useState<string>('mercado_livre_classic');
   const [mode, setMode] = useState<number>(1); // 1 = Price, 2 = Margin, 3 = Profit
@@ -26,6 +27,8 @@ export default function SimulatorPage() {
   const [shippingOverride, setShippingOverride] = useState<string>('');
   const [freeShipping, setFreeShipping] = useState(false);
   const [reputation, setReputation] = useState<string>('verde');
+  const [category, setCategory] = useState<string>('');
+  const [packagingOverrideId, setPackagingOverrideId] = useState<number | null>(null);
   
   const [result, setResult] = useState<SimulatorResult | null>(null);
   const [loading, setLoading] = useState(false);
@@ -50,12 +53,14 @@ export default function SimulatorPage() {
 
   const loadProductsAndKits = async () => {
     try {
-      const [prodRes, kitRes] = await Promise.all([
+      const [prodRes, kitRes, pkgRes] = await Promise.all([
         api.getProducts(),
-        api.getKits()
+        api.getKits(),
+        api.getPackaging()
       ]);
       setProducts(prodRes);
       setKits(kitRes);
+      setPackagings(pkgRes);
       if (prodRes.length > 0) {
         setSelectedItemKey(`product_${prodRes[0].id}`);
       } else if (kitRes.length > 0) {
@@ -91,7 +96,9 @@ export default function SimulatorPage() {
         reputation,
         shipping_override: overrideVal,
         is_kit: isKit,
-        free_shipping: freeShipping
+        free_shipping: freeShipping,
+        category: category || undefined,
+        packaging_override_id: packagingOverrideId
       });
       setResult(res);
     } catch (err: any) {
@@ -108,11 +115,13 @@ export default function SimulatorPage() {
     if (selectedItemKey && parseFormFloat(inputValue) > 0) {
       handleCalculate();
     }
-  }, [selectedItemKey, marketplace, mode, freeShipping, reputation]);
+  }, [selectedItemKey, marketplace, mode, freeShipping, reputation, category, packagingOverrideId]);
 
   const selectedItem = selectedItemKey.startsWith('kit_')
     ? kits.find(k => `kit_${k.id}` === selectedItemKey)
     : products.find(p => `product_${p.id}` === selectedItemKey);
+
+  const containers = packagings.filter(p => p.type === 'box' || p.type === 'envelope');
 
   return (
     <div className="p-6 md:p-8 space-y-8 max-w-7xl mx-auto w-full">
@@ -150,7 +159,7 @@ export default function SimulatorPage() {
                 <label className="text-xs text-slate-400 font-bold uppercase">Produto / Kit Alvo</label>
                 <select
                   value={selectedItemKey}
-                  onChange={(e) => setSelectedItemKey(e.target.value)}
+                  onChange={(e) => { setSelectedItemKey(e.target.value); setPackagingOverrideId(null); }}
                   className="w-full px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 >
                   <optgroup label="Produtos">
@@ -223,6 +232,22 @@ export default function SimulatorPage() {
                   </div>
                 </div>
               )}
+
+              {/* Category Selector */}
+              <div className="space-y-1">
+                <label className="text-xs text-slate-400 font-bold uppercase">Departamento / Categoria</label>
+                <select
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                >
+                  <option value="">Padrão (Planilha)</option>
+                  <option value="sapato">Calçados / Sapatos</option>
+                  <option value="vestuario">Vestuário / Roupas</option>
+                  <option value="eletronico">Eletrônicos / Tecnologia</option>
+                  <option value="livro">Livros</option>
+                </select>
+              </div>
 
               {/* Solve Mode Selector */}
               <div className="space-y-1">
@@ -392,9 +417,31 @@ export default function SimulatorPage() {
                             <span>Custo de Compra do Item</span>
                             <span>R$ {result.purchase_cost.toFixed(2)}</span>
                           </div>
-                          <div className="flex justify-between">
-                            <span>Custo de Embalagens</span>
-                            <span>R$ {result.packaging_cost.toFixed(2)}</span>
+                          <div className="py-2 border-t border-b border-slate-900 my-1 space-y-2">
+                            <div className="flex justify-between items-center text-[11px]">
+                              <span className="text-slate-450">Embalagem Recomendada/Selecionada:</span>
+                              <span className="font-semibold text-slate-200">{result.selected_packaging_name || 'Nenhuma'}</span>
+                            </div>
+                            <div className="flex justify-between items-center text-[11px]">
+                              <span className="text-slate-450">Alterar Embalagem:</span>
+                              <select
+                                value={packagingOverrideId || ''}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setPackagingOverrideId(val ? parseInt(val) : null);
+                                }}
+                                className="px-2 py-0.5 bg-slate-900 border border-slate-850 rounded text-slate-300 text-[11px] focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                              >
+                                <option value="">Auto (Recomendada)</option>
+                                {containers.map(c => (
+                                  <option key={c.id} value={c.id}>{c.name} (R$ {c.cost.toFixed(2)})</option>
+                                ))}
+                              </select>
+                            </div>
+                            <div className="flex justify-between text-[11px] pt-1">
+                              <span className="text-slate-450">Custo Total de Embalagens</span>
+                              <span>R$ {result.packaging_cost.toFixed(2)}</span>
+                            </div>
                           </div>
                           <div className="flex justify-between">
                             <span>Custo Fixo Alocado (Meta 1000 un)</span>
@@ -466,7 +513,11 @@ export default function SimulatorPage() {
 
                     {/* Impostos */}
                     <div className="py-3 flex justify-between text-sm items-center">
-                      <span className="text-slate-400 pl-5">Impostos incidentes</span>
+                      <span className="text-slate-400 pl-5">
+                        {result.tax_rate !== undefined 
+                          ? `Simples Nacional (${result.tax_rate.toFixed(1)}%)` 
+                          : 'Impostos incidentes'}
+                      </span>
                       <span className="font-medium text-red-450">- R$ {result.tax_cost.toFixed(2)}</span>
                     </div>
 

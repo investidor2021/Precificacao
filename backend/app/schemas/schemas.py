@@ -157,6 +157,8 @@ class SimulatorRequest(BaseModel):
     shipping_override: Optional[float] = None
     is_kit: Optional[bool] = False
     free_shipping: Optional[bool] = False
+    category: Optional[str] = None
+    packaging_override_id: Optional[int] = None
 
 class SimulatorResult(BaseModel):
     price: float
@@ -177,6 +179,9 @@ class SimulatorResult(BaseModel):
     fixed_fee_val: float = 0.0
     raw_shipping_val: float = 0.0
     shipping_discount_val: float = 0.0
+    selected_packaging_id: Optional[int] = None
+    selected_packaging_name: Optional[str] = ""
+    tax_rate: float = 0.0
 
 # --- Comparator ---
 class ComparatorRequest(BaseModel):
