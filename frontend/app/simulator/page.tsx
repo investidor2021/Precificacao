@@ -30,6 +30,19 @@ export default function SimulatorPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [expandedSections, setExpandedSections] = useState({
+    cost: true,
+    fees: true,
+    shipping: true,
+  });
+
+  const toggleSection = (section: 'cost' | 'fees' | 'shipping') => {
+    setExpandedSections(prev => ({
+      ...prev,
+      [section]: !prev[section]
+    }));
+  };
+
   useEffect(() => {
     loadProductsAndKits();
   }, []);
@@ -331,22 +344,105 @@ export default function SimulatorPage() {
                   <h4 className="text-xs text-slate-400 font-bold uppercase tracking-wider">Demonstrativo Detalhado</h4>
 
                   <div className="divide-y divide-slate-900">
-                    <div className="py-3 flex justify-between text-sm">
-                      <span className="text-slate-400">Custo Total de Compra (Insumos + Despesas)</span>
-                      <span className="font-medium text-slate-200">R$ {result.unit_cost.toFixed(2)}</span>
+                    {/* Custo Total de Compra */}
+                    <div className="py-3">
+                      <button 
+                        type="button"
+                        onClick={() => toggleSection('cost')}
+                        className="w-full flex justify-between items-center text-sm hover:text-white transition focus:outline-none"
+                      >
+                        <span className="text-slate-400 flex items-center space-x-1">
+                          <ChevronRight className={`w-4 h-4 text-slate-500 transition-transform duration-200 ${expandedSections.cost ? 'rotate-90' : ''}`} />
+                          <span>Custo Total de Compra (Insumos + Despesas)</span>
+                        </span>
+                        <span className="font-medium text-slate-200">R$ {result.unit_cost.toFixed(2)}</span>
+                      </button>
+                      
+                      {expandedSections.cost && (
+                        <div className="pl-5 pr-2 py-2 mt-2 space-y-2 text-xs text-slate-450 border-l border-slate-800 transition-all duration-200">
+                          <div className="flex justify-between">
+                            <span>Custo de Compra do Item</span>
+                            <span>R$ {result.purchase_cost.toFixed(2)}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>Custo de Embalagens</span>
+                            <span>R$ {result.packaging_cost.toFixed(2)}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>Custo Fixo Alocado (Meta 1000 un)</span>
+                            <span>R$ {result.fixed_operational_cost.toFixed(2)}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>Custo Variável Operacional</span>
+                            <span>R$ {result.variable_operational_cost.toFixed(2)}</span>
+                          </div>
+                        </div>
+                      )}
                     </div>
-                    <div className="py-3 flex justify-between text-sm">
-                      <span className="text-slate-400">Comissões & Tarifas do Canal</span>
-                      <span className="font-medium text-red-400">- R$ {result.marketplace_fees.toFixed(2)}</span>
+
+                    {/* Comissões & Tarifas */}
+                    <div className="py-3">
+                      <button 
+                        type="button"
+                        onClick={() => toggleSection('fees')}
+                        className="w-full flex justify-between items-center text-sm hover:text-white transition focus:outline-none"
+                      >
+                        <span className="text-slate-400 flex items-center space-x-1">
+                          <ChevronRight className={`w-4 h-4 text-slate-500 transition-transform duration-200 ${expandedSections.fees ? 'rotate-90' : ''}`} />
+                          <span>Comissões & Tarifas do Canal</span>
+                        </span>
+                        <span className="font-medium text-red-450">- R$ {result.marketplace_fees.toFixed(2)}</span>
+                      </button>
+
+                      {expandedSections.fees && (
+                        <div className="pl-5 pr-2 py-2 mt-2 space-y-2 text-xs text-slate-450 border-l border-slate-800 transition-all duration-200">
+                          <div className="flex justify-between">
+                            <span>Comissão Percentual</span>
+                            <span>R$ {result.commission_percent_val.toFixed(2)}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>Tarifa Fixa por Venda</span>
+                            <span>R$ {result.fixed_fee_val.toFixed(2)}</span>
+                          </div>
+                        </div>
+                      )}
                     </div>
-                    <div className="py-3 flex justify-between text-sm">
-                      <span className="text-slate-400">Frete pago pelo Vendedor</span>
-                      <span className="font-medium text-red-400">- R$ {result.shipping_cost.toFixed(2)}</span>
+
+                    {/* Frete pago pelo Vendedor */}
+                    <div className="py-3">
+                      <button 
+                        type="button"
+                        onClick={() => toggleSection('shipping')}
+                        className="w-full flex justify-between items-center text-sm hover:text-white transition focus:outline-none"
+                      >
+                        <span className="text-slate-400 flex items-center space-x-1">
+                          <ChevronRight className={`w-4 h-4 text-slate-500 transition-transform duration-200 ${expandedSections.shipping ? 'rotate-90' : ''}`} />
+                          <span>Frete pago pelo Vendedor</span>
+                        </span>
+                        <span className="font-medium text-red-450">- R$ {result.shipping_cost.toFixed(2)}</span>
+                      </button>
+
+                      {expandedSections.shipping && (
+                        <div className="pl-5 pr-2 py-2 mt-2 space-y-2 text-xs text-slate-450 border-l border-slate-800 transition-all duration-200">
+                          <div className="flex justify-between">
+                            <span>Frete Bruto de Tabela</span>
+                            <span>R$ {result.raw_shipping_val.toFixed(2)}</span>
+                          </div>
+                          <div className="flex justify-between text-emerald-500">
+                            <span>Subsídio do Canal (Reputação Verde)</span>
+                            <span>- R$ {result.shipping_discount_val.toFixed(2)}</span>
+                          </div>
+                        </div>
+                      )}
                     </div>
-                    <div className="py-3 flex justify-between text-sm">
-                      <span className="text-slate-400">Impostos incidentes</span>
-                      <span className="font-medium text-red-400">- R$ {result.tax_cost.toFixed(2)}</span>
+
+                    {/* Impostos */}
+                    <div className="py-3 flex justify-between text-sm items-center">
+                      <span className="text-slate-400 pl-5">Impostos incidentes</span>
+                      <span className="font-medium text-red-450">- R$ {result.tax_cost.toFixed(2)}</span>
                     </div>
+
+                    {/* Markup */}
                     <div className="py-3 flex justify-between text-sm border-t border-slate-900 font-bold">
                       <span className="text-slate-200">Markup Final</span>
                       <span className="text-emerald-400">{result.markup.toFixed(2)}x</span>

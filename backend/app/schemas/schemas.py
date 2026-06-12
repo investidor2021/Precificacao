@@ -163,6 +163,14 @@ class SimulatorResult(BaseModel):
     shipping_cost: float
     tax_cost: float
     unit_cost: float
+    purchase_cost: float = 0.0
+    packaging_cost: float = 0.0
+    fixed_operational_cost: float = 0.0
+    variable_operational_cost: float = 0.0
+    commission_percent_val: float = 0.0
+    fixed_fee_val: float = 0.0
+    raw_shipping_val: float = 0.0
+    shipping_discount_val: float = 0.0
 
 # --- Comparator ---
 class ComparatorRequest(BaseModel):

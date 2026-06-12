@@ -25,26 +25,28 @@ async def get_loaded_unit_cost(sheets_db, product: Dict[str, Any]) -> float:
     loaded_cost = product["purchase_cost"] + total_packaging_cost + fixed_allocation + variable_operational_unit
     return round(loaded_cost, 2)
 
-async def get_ml_shipping_cost(sheets_db, weight: float, height: float, width: float, length: float, ml_config: Dict[str, Any]) -> float:
+async def get_ml_raw_shipping_fee(weight: float, height: float, width: float, length: float) -> float:
     cubic = await calculate_cubic_weight(height, width, length)
     effective_weight = max(weight, cubic)
     
     # Default Brazilian marketplace logistics bracket fees
     if effective_weight <= 0.5:
-        matched_fee = 19.90
+        return 19.90
     elif effective_weight <= 1.0:
-        matched_fee = 22.90
+        return 22.90
     elif effective_weight <= 2.0:
-        matched_fee = 24.90
+        return 24.90
     elif effective_weight <= 5.0:
-        matched_fee = 29.90
+        return 29.90
     elif effective_weight <= 9.0:
-        matched_fee = 39.90
+        return 39.90
     else:
-        matched_fee = 59.90
-        
+        return 59.90
+
+async def get_ml_shipping_cost(sheets_db, weight: float, height: float, width: float, length: float, ml_config: Dict[str, Any]) -> float:
+    raw_fee = await get_ml_raw_shipping_fee(weight, height, width, length)
     discount = ml_config["shipping_subsidy_rate"] / 100.0
-    return round(matched_fee * (1.0 - discount), 2)
+    return round(raw_fee * (1.0 - discount), 2)
 
 async def simulate_pricing_engine(sheets_db, request: SimulatorRequest) -> SimulatorResult:
     # 1. Fetch Product or Kit
@@ -56,7 +58,24 @@ async def simulate_pricing_engine(sheets_db, request: SimulatorRequest) -> Simul
     if not product:
         raise ValueError("Product or Kit not found")
         
-    unit_cost = await get_loaded_unit_cost(sheets_db, product)
+    # Calculate detailed cost components
+    packagings = sheets_db.get_packaging()
+    packaging_cost = sum(pkg["cost"] for pkg in packagings)
+    
+    op_costs = sheets_db.get_operational_costs()
+    fixed_operational_monthly = sum(oc["amount"] for oc in op_costs if oc["type"] == "fixed")
+    variable_operational_cost = sum(oc["amount"] for oc in op_costs if oc["type"] == "variable")
+    
+    target_monthly_sales = 1000
+    fixed_operational_cost = fixed_operational_monthly / target_monthly_sales if target_monthly_sales > 0 else 0.0
+    
+    purchase_cost = product["purchase_cost"]
+    
+    purchase_cost_rounded = round(purchase_cost, 2)
+    packaging_cost_rounded = round(packaging_cost, 2)
+    fixed_operational_cost_rounded = round(fixed_operational_cost, 2)
+    variable_operational_cost_rounded = round(variable_operational_cost, 2)
+    unit_cost = round(purchase_cost_rounded + packaging_cost_rounded + fixed_operational_cost_rounded + variable_operational_cost_rounded, 2)
     
     # 2. Check Marketplace
     if request.marketplace.startswith("mercado_livre"):
@@ -73,7 +92,11 @@ async def simulate_pricing_engine(sheets_db, request: SimulatorRequest) -> Simul
         fixed_fee_threshold = ml_config["fixed_fee_threshold"]
         fixed_fee = ml_config["fixed_fee"]
         
-        subsidized_shipping = await get_ml_shipping_cost(sheets_db, product["weight"], product["height"], product["width"], product["length"], ml_config)
+        raw_fee_bracket = await get_ml_raw_shipping_fee(product["weight"], product["height"], product["width"], product["length"])
+        reputation_active = getattr(request, "reputation_good", True)
+        discount_rate = ml_config["shipping_subsidy_rate"] if reputation_active else 0.0
+        discount = discount_rate / 100.0
+        subsidized_shipping = round(raw_fee_bracket * (1.0 - discount), 2)
         
         if request.shipping_override is not None:
             shipping_cost_over = request.shipping_override
@@ -89,9 +112,13 @@ async def simulate_pricing_engine(sheets_db, request: SimulatorRequest) -> Simul
             p = max(p, 0.01)
             if p < fixed_fee_threshold:
                 fee = (p * r_comm) + fixed_fee
+                commission_percent_val = p * r_comm
+                fixed_fee_val = fixed_fee
                 ship = shipping_cost_under
             else:
                 fee = p * r_comm
+                commission_percent_val = p * r_comm
+                fixed_fee_val = 0.0
                 ship = shipping_cost_over
                 
             tax = p * r_tax
@@ -99,7 +126,20 @@ async def simulate_pricing_engine(sheets_db, request: SimulatorRequest) -> Simul
             margin = (profit / p) * 100.0 if p > 0 else 0.0
             roi = (profit / unit_cost) * 100.0 if unit_cost > 0 else 0.0
             markup = p / unit_cost if unit_cost > 0 else 0.0
-            return p, profit, margin, roi, markup, fee, ship, tax
+            
+            # Detailed shipping breakdown
+            if ship == 0.0:
+                raw_shipping_val = 0.0
+                shipping_discount_val = 0.0
+            else:
+                if request.shipping_override is not None:
+                    raw_shipping_val = request.shipping_override
+                    shipping_discount_val = 0.0
+                else:
+                    raw_shipping_val = raw_fee_bracket
+                    shipping_discount_val = round(raw_fee_bracket * discount, 2)
+                    
+            return p, profit, margin, roi, markup, fee, ship, tax, commission_percent_val, fixed_fee_val, raw_shipping_val, shipping_discount_val
             
         def find_ml_breakeven():
             # Try Region 1
@@ -139,7 +179,7 @@ async def simulate_pricing_engine(sheets_db, request: SimulatorRequest) -> Simul
                 calculated_price = max(p2, fixed_fee_threshold)
                 
         calculated_price = round(calculated_price, 2)
-        price, net_profit, margin, roi, markup, fees, shipping, tax = eval_ml_price(calculated_price)
+        price, net_profit, margin, roi, markup, fees, shipping, tax, comm_val, fix_val, raw_ship, ship_disc = eval_ml_price(calculated_price)
         
         return SimulatorResult(
             price=price,
@@ -151,7 +191,15 @@ async def simulate_pricing_engine(sheets_db, request: SimulatorRequest) -> Simul
             marketplace_fees=round(fees, 2),
             shipping_cost=round(shipping, 2),
             tax_cost=round(tax, 2),
-            unit_cost=round(unit_cost, 2)
+            unit_cost=round(unit_cost, 2),
+            purchase_cost=purchase_cost_rounded,
+            packaging_cost=packaging_cost_rounded,
+            fixed_operational_cost=fixed_operational_cost_rounded,
+            variable_operational_cost=variable_operational_cost_rounded,
+            commission_percent_val=round(comm_val, 2),
+            fixed_fee_val=round(fix_val, 2),
+            raw_shipping_val=round(raw_ship, 2),
+            shipping_discount_val=round(ship_disc, 2)
         )
         
     elif request.marketplace == "shopee":
@@ -178,7 +226,7 @@ async def simulate_pricing_engine(sheets_db, request: SimulatorRequest) -> Simul
             margin = (profit / p) * 100.0 if p > 0 else 0.0
             roi = (profit / unit_cost) * 100.0 if unit_cost > 0 else 0.0
             markup = p / unit_cost if unit_cost > 0 else 0.0
-            return p, profit, margin, roi, markup, fees, shipping_cost, tax
+            return p, profit, margin, roi, markup, fees, shipping_cost, tax, base_fee + trans_fee, fixed_fee
             
         calculated_price = 0.0
         if request.mode == 1:
@@ -218,7 +266,7 @@ async def simulate_pricing_engine(sheets_db, request: SimulatorRequest) -> Simul
             breakeven_price = be_nocap
             
         calculated_price = round(calculated_price, 2)
-        price, net_profit, margin, roi, markup, fees, shipping, tax = eval_shopee_price(calculated_price)
+        price, net_profit, margin, roi, markup, fees, shipping, tax, comm_val, fix_val = eval_shopee_price(calculated_price)
         
         return SimulatorResult(
             price=price,
@@ -230,7 +278,15 @@ async def simulate_pricing_engine(sheets_db, request: SimulatorRequest) -> Simul
             marketplace_fees=round(fees, 2),
             shipping_cost=round(shipping, 2),
             tax_cost=round(tax, 2),
-            unit_cost=round(unit_cost, 2)
+            unit_cost=round(unit_cost, 2),
+            purchase_cost=purchase_cost_rounded,
+            packaging_cost=packaging_cost_rounded,
+            fixed_operational_cost=fixed_operational_cost_rounded,
+            variable_operational_cost=variable_operational_cost_rounded,
+            commission_percent_val=round(comm_val, 2),
+            fixed_fee_val=round(fix_val, 2),
+            raw_shipping_val=round(shipping, 2),
+            shipping_discount_val=0.0
         )
     else:
         raise ValueError("Invalid marketplace")

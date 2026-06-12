@@ -90,6 +90,14 @@ export interface SimulatorResult {
   shipping_cost: number;
   tax_cost: number;
   unit_cost: number;
+  purchase_cost: number;
+  packaging_cost: number;
+  fixed_operational_cost: number;
+  variable_operational_cost: number;
+  commission_percent_val: number;
+  fixed_fee_val: number;
+  raw_shipping_val: number;
+  shipping_discount_val: number;
 }
 
 export interface MarketplaceComparisonDetails {

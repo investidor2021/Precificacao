@@ -188,3 +188,81 @@ async def test_kit_simulation_pricing_free_shipping_under_79():
     assert res.net_profit == 7.43
 
 
+@pytest.mark.asyncio
+async def test_simulate_pricing_engine_breakdown():
+    sheets_db = MagicMock()
+    
+    product = {
+        "id": 1,
+        "sku": "SKU-TEST",
+        "name": "Test Product",
+        "purchase_cost": 50.0,
+        "weight": 1.5,
+        "height": 10,
+        "width": 10,
+        "length": 10
+    }
+    
+    sheets_db.get_product.return_value = product
+    
+    # Cost = 50.0 + 3.0 (pkgs) + 0.50 (fixed: 500/1000) + 1.50 (variable) = 55.00
+    sheets_db.get_packaging.return_value = [
+        {"cost": 2.50, "type": "box"},
+        {"cost": 0.50, "type": "label"}
+    ]
+    sheets_db.get_operational_costs.return_value = [
+        {"amount": 500.0, "type": "fixed"},
+        {"amount": 1.50, "type": "variable"}
+    ]
+    sheets_db.get_ml_config.return_value = {
+        "classic_commission_rate": 11.5,
+        "fixed_fee_threshold": 79.0,
+        "fixed_fee": 6.0,
+        "tax_rate": 4.0,
+        "shipping_subsidy_rate": 50.0
+    }
+    
+    # 1. ML Classic under threshold (e.g. 70.0)
+    req = SimulatorRequest(
+        product_id=1,
+        marketplace="mercado_livre_classic",
+        mode=1,
+        input_value=70.0,
+        is_kit=False,
+        free_shipping=False
+    )
+    
+    res = await simulate_pricing_engine(sheets_db, req)
+    assert res.price == 70.0
+    assert res.purchase_cost == 50.0
+    assert res.packaging_cost == 3.0
+    assert res.fixed_operational_cost == 0.50
+    assert res.variable_operational_cost == 1.50
+    assert res.unit_cost == 55.0
+    assert res.commission_percent_val == round(70.0 * 0.115, 2)
+    assert res.fixed_fee_val == 6.0
+    assert res.shipping_cost == 0.0
+    assert res.raw_shipping_val == 0.0
+    assert res.shipping_discount_val == 0.0
+    
+    # 2. ML Classic over threshold (e.g. 100.0)
+    req_over = SimulatorRequest(
+        product_id=1,
+        marketplace="mercado_livre_classic",
+        mode=1,
+        input_value=100.0,
+        is_kit=False,
+        free_shipping=False
+    )
+    
+    res_over = await simulate_pricing_engine(sheets_db, req_over)
+    assert res_over.price == 100.0
+    assert res_over.commission_percent_val == 11.50
+    assert res_over.fixed_fee_val == 0.0
+    # 1.5kg fits in 1.0kg - 2.0kg bracket: 24.90. Subsidized 50%: 12.45
+    assert res_over.shipping_cost == 12.45
+    assert res_over.raw_shipping_val == 24.90
+    assert res_over.shipping_discount_val == 12.45
+
+
+
