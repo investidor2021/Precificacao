@@ -64,6 +64,11 @@ class PackagingBase(BaseModel):
 class PackagingCreate(PackagingBase):
     pass
 
+class PackagingUpdate(BaseModel):
+    name: Optional[str] = None
+    cost: Optional[float] = None
+    type: Optional[str] = None
+
 class PackagingResponse(PackagingBase):
     id: int
     created_at: datetime

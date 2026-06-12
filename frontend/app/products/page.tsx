@@ -40,6 +40,7 @@ export default function ProductsPage() {
   // Edit states
   const [isEditing, setIsEditing] = useState(false);
   const [editingProductId, setEditingProductId] = useState<number | null>(null);
+  const [editingPkgId, setEditingPkgId] = useState<number | null>(null);
 
   // Form states
   const [productForm, setProductForm] = useState({
@@ -333,15 +334,31 @@ export default function ProductsPage() {
         cost: parseFormFloat(pkgForm.cost),
         type: pkgForm.type
       };
-      const res = await api.createPackaging(payload);
-      setPackaging([...packaging, res]);
+      if (editingPkgId !== null) {
+        const res = await api.updatePackaging(editingPkgId, payload);
+        setPackaging(packaging.map(p => p.id === editingPkgId ? res : p));
+      } else {
+        const res = await api.createPackaging(payload);
+        setPackaging([...packaging, res]);
+      }
       setShowPkgModal(false);
       setPkgForm({ name: '', cost: '', type: 'box' });
+      setEditingPkgId(null);
       const prodRes = await api.getProducts();
       setProducts(prodRes);
     } catch (err: any) {
       alert(err.message);
     }
+  };
+
+  const handleEditPkgClick = (pkg: Packaging) => {
+    setPkgForm({
+      name: pkg.name,
+      cost: pkg.cost.toString().replace('.', ','),
+      type: pkg.type
+    });
+    setEditingPkgId(pkg.id);
+    setShowPkgModal(true);
   };
 
   const handleCreateOp = async (e: React.FormEvent) => {
@@ -657,12 +674,20 @@ export default function ProductsPage() {
                           <span className="px-2.5 py-1 rounded-md text-[10px] uppercase font-black bg-emerald-500/10 text-emerald-400 tracking-wider">
                             {pkg.type}
                           </span>
-                          <button
-                            onClick={() => handleDeletePkg(pkg.id)}
-                            className="p-1 text-slate-400 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          <div className="flex items-center space-x-1">
+                            <button
+                              onClick={() => handleEditPkgClick(pkg)}
+                              className="p-1 text-slate-400 hover:text-emerald-500 hover:bg-emerald-500/10 rounded-lg transition"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDeletePkg(pkg.id)}
+                              className="p-1 text-slate-400 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
                         </div>
                         <h4 className="font-bold text-lg dark:text-white">{pkg.name}</h4>
                       </div>
@@ -932,8 +957,13 @@ export default function ProductsPage() {
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
             <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-900 flex justify-between items-center">
-              <h3 className="text-lg font-bold dark:text-white">Nova Embalagem / Insumo</h3>
-              <button onClick={() => setShowPkgModal(false)} className="text-slate-400 hover:text-slate-200 p-1">
+              <h3 className="text-lg font-bold dark:text-white">
+                {editingPkgId !== null ? 'Editar Embalagem / Insumo' : 'Nova Embalagem / Insumo'}
+              </h3>
+              <button 
+                onClick={() => { setShowPkgModal(false); setEditingPkgId(null); setPkgForm({ name: '', cost: '', type: 'box' }); }} 
+                className="text-slate-400 hover:text-slate-200 p-1"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -974,7 +1004,8 @@ export default function ProductsPage() {
 
               <div className="pt-4 flex justify-end space-x-3">
                 <button
-                  type="button" onClick={() => setShowPkgModal(false)}
+                  type="button" 
+                  onClick={() => { setShowPkgModal(false); setEditingPkgId(null); setPkgForm({ name: '', cost: '', type: 'box' }); }}
                   className="px-4 py-2 border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-900 rounded-lg text-slate-700 dark:text-slate-300 text-sm font-semibold transition"
                 >
                   Cancelar
@@ -983,7 +1014,7 @@ export default function ProductsPage() {
                   type="submit"
                   className="px-6 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-semibold shadow-md shadow-emerald-500/10 transition"
                 >
-                  Salvar
+                  {editingPkgId !== null ? 'Atualizar' : 'Salvar'}
                 </button>
               </div>
             </form>

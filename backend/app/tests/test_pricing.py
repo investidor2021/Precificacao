@@ -297,6 +297,15 @@ def test_calculate_packaging_cost_selection():
     # Box M (2.20) + Fita (0.30) = 2.50
     assert cost_large == 2.50
 
+def test_update_packaging_mock():
+    sheets_db = MagicMock()
+    sheets_db.update_packaging.return_value = {"id": 1, "name": "Envelope Updated", "cost": 1.20, "type": "envelope"}
+    
+    res = sheets_db.update_packaging(1, {"name": "Envelope Updated", "cost": 1.20})
+    assert res["id"] == 1
+    assert res["name"] == "Envelope Updated"
+    assert res["cost"] == 1.20
+
 
 
 

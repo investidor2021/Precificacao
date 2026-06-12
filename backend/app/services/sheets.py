@@ -300,6 +300,37 @@ class GoogleSheetsService:
                 return True
         return False
 
+    def update_packaging(self, pkg_id: int, update_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        self._clear_cache()
+        ws = self._get_worksheet("embalagens")
+        records = ws.get_all_records(value_render_option="UNFORMATTED_VALUE")
+        
+        row_idx = -1
+        current_pkg = None
+        for i, r in enumerate(records):
+            if safe_int(r.get("id") or 0) == pkg_id:
+                row_idx = i + 2
+                current_pkg = r
+                break
+                
+        if row_idx == -1:
+            return None
+            
+        for k, v in update_data.items():
+            current_pkg[k] = v
+            
+        row_data = [
+            pkg_id,
+            current_pkg["name"],
+            safe_float(current_pkg["cost"]),
+            current_pkg["type"]
+        ]
+        
+        ws.update(range_name=f"A{row_idx}:D{row_idx}", values=[row_data], value_input_option="RAW")
+        current_pkg["id"] = pkg_id
+        current_pkg["created_at"] = datetime.datetime.utcnow().isoformat()
+        return current_pkg
+
     # --- OPERATIONAL COSTS ---
     def get_operational_costs(self) -> List[Dict[str, Any]]:
         def fetch():

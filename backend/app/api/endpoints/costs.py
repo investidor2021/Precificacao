@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, status
 from typing import List
 
 from app.schemas.schemas import (
-    PackagingCreate, PackagingResponse, 
+    PackagingCreate, PackagingResponse, PackagingUpdate,
     OperationalCostCreate, OperationalCostResponse
 )
 from app.services.sheets import sheets_db
@@ -28,6 +28,29 @@ async def create_packaging(pkg_in: PackagingCreate):
         return sheets_db.create_packaging(pkg_dict)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.put("/packaging/{pkg_id}", response_model=PackagingResponse)
+async def update_packaging(pkg_id: int, pkg_in: PackagingUpdate):
+    try:
+        existing = sheets_db.get_packaging()
+        found = any(safe_int(p["id"]) == pkg_id for p in existing)
+        if not found:
+            raise HTTPException(status_code=404, detail="Packaging item not found")
+            
+        update_data = pkg_in.dict(exclude_unset=True)
+        res = sheets_db.update_packaging(pkg_id, update_data)
+        return res
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Helper to cast safe_int
+def safe_int(val):
+    try:
+        return int(float(str(val)))
+    except (ValueError, TypeError):
+        return 0
 
 @router.delete("/packaging/{pkg_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_packaging(pkg_id: int):

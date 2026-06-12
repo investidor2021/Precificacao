@@ -64,6 +64,10 @@ export const api = {
     method: 'POST',
     body: JSON.stringify(data),
   }),
+  updatePackaging: (id: number, data: any) => request<any>(`/api/costs/packaging/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  }),
   deletePackaging: (id: number) => request<void>(`/api/costs/packaging/${id}`, {
     method: 'DELETE',
   }),
