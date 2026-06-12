@@ -203,13 +203,13 @@ async def simulate_pricing_engine(sheets_db, request: SimulatorRequest) -> Simul
         
         if req_cat:
             cat_lower = req_cat.lower().strip()
-            if any(x in cat_lower for x in ["sapato", "calçado", "calçado", "brinquedo"]):
+            if any(x in cat_lower for x in ["sapato", "calçado", "calçado", "brinquedo", "bebe", "veiculo", "esporte", "fitness", "ferramenta", "casa", "decoracao", "moveis", "saude"]):
                 commission_rate = 16.5 if is_premium else 11.5
-            elif any(x in cat_lower for x in ["vestuario", "roupa", "moda", "acessório"]):
+            elif any(x in cat_lower for x in ["vestuario", "roupa", "moda", "acessorio", "beleza", "cosmetico", "joia", "relogio", "festa"]):
                 commission_rate = 17.5 if is_premium else 12.5
-            elif any(x in cat_lower for x in ["eletronico", "celular", "computador", "tecnologia"]):
+            elif any(x in cat_lower for x in ["eletronico", "celular", "computador", "tecnologia", "game", "console", "eletrodomestico", "agro", "alimento", "bebida", "instrumento"]):
                 commission_rate = 15.5 if is_premium else 10.5
-            elif any(x in cat_lower for x in ["livro"]):
+            elif any(x in cat_lower for x in ["livro", "revista", "comic", "filme", "musica"]):
                 commission_rate = 15.0 if is_premium else 10.0
             else:
                 commission_rate = default_rate

@@ -242,10 +242,15 @@ export default function SimulatorPage() {
                   className="w-full px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 >
                   <option value="">Padrão (Planilha)</option>
-                  <option value="sapato">Calçados / Sapatos</option>
-                  <option value="vestuario">Vestuário / Roupas</option>
-                  <option value="eletronico">Eletrônicos / Tecnologia</option>
-                  <option value="livro">Livros</option>
+                  <option value="veiculo">Acessórios para Veículos</option>
+                  <option value="agro">Agro, Alimentos e Bebidas</option>
+                  <option value="brinquedo">Brinquedos, Bebês e Hobbies</option>
+                  <option value="sapato">Calçados, Roupas e Bolsas (Moda)</option>
+                  <option value="casa">Casa, Móveis, Decoração e Ferramentas</option>
+                  <option value="eletronico">Celulares, Computadores e Tecnologia</option>
+                  <option value="esporte">Esportes e Fitness</option>
+                  <option value="livro">Livros, Revistas, Filmes e Música</option>
+                  <option value="beleza">Beleza, Cuidado Pessoal, Saúde e Joias</option>
                 </select>
               </div>
 
