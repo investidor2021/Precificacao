@@ -128,11 +128,14 @@ export interface SmartPricingTier {
   profit: number;
   margin: number;
   roi: number;
+  safety_triggered?: boolean;
   description: string;
 }
 
 export interface SmartPricingResponse {
-  tiers: SmartPricingTier[];
+  mercado_livre_classic: SmartPricingTier[];
+  mercado_livre_premium: SmartPricingTier[];
+  shopee: SmartPricingTier[];
 }
 
 export interface ProfitByProductItem {

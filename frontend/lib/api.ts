@@ -117,6 +117,8 @@ export const api = {
     shipping_override?: number;
     is_kit?: boolean;
     free_shipping?: boolean;
+    category?: string;
+    packaging_override_id?: number | null;
   }) => request<any>('/api/simulations/compare', {
     method: 'POST',
     body: JSON.stringify(data),
@@ -127,6 +129,8 @@ export const api = {
     category: string;
     competitors: number[];
     is_kit?: boolean;
+    packaging_override_id?: number | null;
+    min_desired_margin?: number | null;
   }) => request<any>('/api/simulations/smart-pricing', {
     method: 'POST',
     body: JSON.stringify(data),

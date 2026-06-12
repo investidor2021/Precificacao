@@ -212,6 +212,8 @@ class SmartPricingRequest(BaseModel):
     category: str
     competitors: List[float]
     is_kit: Optional[bool] = False
+    packaging_override_id: Optional[int] = None
+    min_desired_margin: Optional[float] = None
 
 class SmartPricingTier(BaseModel):
     strategy: str # "Mínimo", "Ideal", "Agressivo"
@@ -219,10 +221,13 @@ class SmartPricingTier(BaseModel):
     profit: float
     margin: float
     roi: float
+    safety_triggered: bool = False
     description: str
 
 class SmartPricingResponse(BaseModel):
-    tiers: List[SmartPricingTier]
+    mercado_livre_classic: List[SmartPricingTier]
+    mercado_livre_premium: List[SmartPricingTier]
+    shopee: List[SmartPricingTier]
 
 # --- Dashboard ---
 class ProfitByProductItem(BaseModel):

@@ -20,12 +20,16 @@ import { Product, SmartPricingResponse, SmartPricingTier } from '@/types';
 export default function SmartPricingPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [kits, setKits] = useState<any[]>([]);
+  const [packagings, setPackagings] = useState<any[]>([]);
   
   // Selection Mode
   const [isManualCost, setIsManualCost] = useState(false);
   const [selectedItemKey, setSelectedItemKey] = useState<string>('');
   const [customCost, setCustomCost] = useState<string>('');
-  const [category, setCategory] = useState<string>('Eletrônicos');
+  const [category, setCategory] = useState<string>('eletronico');
+  const [packagingOverrideId, setPackagingOverrideId] = useState<number | null>(null);
+  const [minDesiredMargin, setMinDesiredMargin] = useState<string>('');
+  const [activeTab, setActiveTab] = useState<'classic' | 'premium' | 'shopee'>('classic');
   
   // Competitors tags list
   const [competitorInput, setCompetitorInput] = useState<string>('');
@@ -41,12 +45,14 @@ export default function SmartPricingPage() {
 
   const loadProductsAndKits = async () => {
     try {
-      const [prodRes, kitRes] = await Promise.all([
+      const [prodRes, kitRes, pkgRes] = await Promise.all([
         api.getProducts(),
-        api.getKits()
+        api.getKits(),
+        api.getPackaging()
       ]);
       setProducts(prodRes);
       setKits(kitRes);
+      setPackagings(pkgRes);
       if (prodRes.length > 0) {
         setSelectedItemKey(`product_${prodRes[0].id}`);
       } else if (kitRes.length > 0) {
@@ -56,6 +62,10 @@ export default function SmartPricingPage() {
       console.error(err);
     }
   };
+
+  useEffect(() => {
+    setPackagingOverrideId(null);
+  }, [selectedItemKey, isManualCost]);
 
   const addCompetitorPrice = () => {
     const val = parseFloat(competitorInput.replace(',', '.'));
@@ -88,7 +98,9 @@ export default function SmartPricingPage() {
         custom_cost: isManualCost ? parseFormFloat(customCost) : undefined,
         category,
         competitors,
-        is_kit: isManualCost ? undefined : isKit
+        is_kit: isManualCost ? undefined : isKit,
+        packaging_override_id: packagingOverrideId,
+        min_desired_margin: minDesiredMargin !== '' ? parseFormFloat(minDesiredMargin) : undefined
       };
       
       const res = await api.smartPricing(payload);
@@ -180,14 +192,58 @@ export default function SmartPricingPage() {
 
             {/* Category */}
             <div className="space-y-1">
-              <label className="text-xs text-slate-400 font-bold uppercase">Categoria de Venda</label>
-              <input
-                type="text" required
+              <label className="text-xs text-slate-400 font-bold uppercase">Departamento / Categoria</label>
+              <select
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-800 dark:text-slate-200"
-                placeholder="Ex: Eletrônicos, Moda..."
-              />
+                className="w-full px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-800 dark:text-slate-200"
+              >
+                <option value="">Padrão (Planilha)</option>
+                <option value="veiculo">Acessórios para Veículos</option>
+                <option value="agro">Agro, Alimentos e Bebidas</option>
+                <option value="brinquedo">Brinquedos, Bebês e Hobbies</option>
+                <option value="sapato">Calçados, Roupas e Bolsas (Moda)</option>
+                <option value="casa">Casa, Móveis, Decoração e Ferramentas</option>
+                <option value="eletronico">Celulares, Computadores e Tecnologia</option>
+                <option value="esporte">Esportes e Fitness</option>
+                <option value="livro">Livros, Revistas, Filmes e Música</option>
+                <option value="beleza">Beleza, Cuidado Pessoal, Saúde e Joias</option>
+              </select>
+            </div>
+
+            {/* Packaging Override */}
+            <div className="space-y-1">
+              <label className="text-xs text-slate-400 font-bold uppercase">Embalagem</label>
+              <select
+                value={packagingOverrideId || ''}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setPackagingOverrideId(val ? parseInt(val) : null);
+                }}
+                className="w-full px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-800 dark:text-slate-200"
+              >
+                <option value="">Auto (Recomendada)</option>
+                {packagings
+                  .filter(p => p.type === 'box' || p.type === 'envelope')
+                  .map(c => (
+                    <option key={c.id} value={c.id}>{c.name} (R$ {c.cost.toFixed(2)})</option>
+                  ))}
+              </select>
+            </div>
+
+            {/* Safety Margin */}
+            <div className="space-y-1">
+              <label className="text-xs text-slate-400 font-bold uppercase">Margem de Segurança Mínima (%)</label>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={minDesiredMargin}
+                  onChange={(e) => setMinDesiredMargin(e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-800 dark:text-slate-200 pr-8"
+                  placeholder="Sem limite mínimo (ex: 15)"
+                />
+                <span className="absolute right-3 top-2.5 text-slate-500 text-sm font-semibold">%</span>
+              </div>
             </div>
 
             {/* Competitor Price Tags */}
@@ -273,69 +329,124 @@ export default function SmartPricingPage() {
             </div>
           )}
 
-          {pricingData && (
-            <div className="grid grid-cols-1 gap-6">
-              {pricingData.tiers.map((tier, idx) => {
-                const isIdeal = tier.strategy === 'Ideal';
-                const isAggr = tier.strategy === 'Agressivo';
-                
-                return (
-                  <div 
-                    key={idx}
-                    className={`p-6 bg-slate-950 border rounded-3xl transition-all duration-300 relative ${
-                      isIdeal 
-                        ? 'border-emerald-500 shadow-xl shadow-emerald-500/5 ring-1 ring-emerald-500/20' 
-                        : isAggr
-                        ? 'border-orange-500/60 shadow-md'
-                        : 'border-slate-850 opacity-90'
+          {pricingData && (() => {
+            const currentTiers = activeTab === 'classic'
+              ? pricingData.mercado_livre_classic
+              : activeTab === 'premium'
+              ? pricingData.mercado_livre_premium
+              : pricingData.shopee;
+
+            return (
+              <div className="space-y-6">
+                {/* Tab Selector */}
+                <div className="flex border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 p-1.5 rounded-2xl shadow-sm w-full">
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('classic')}
+                    className={`flex-1 py-2.5 text-xs font-bold rounded-xl transition-all ${
+                      activeTab === 'classic'
+                        ? 'bg-emerald-500 text-white shadow-md'
+                        : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-900'
                     }`}
                   >
-                    {/* Strategy Label */}
-                    <div className="absolute top-6 right-6 flex items-center space-x-2">
-                      <span className={`px-2.5 py-1 rounded text-[10px] uppercase font-black tracking-wider ${
-                        isIdeal 
-                          ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                          : isAggr
-                          ? 'bg-orange-500/10 text-orange-400 border border-orange-500/20'
-                          : 'bg-slate-800 text-slate-300 border border-slate-700'
-                      }`}>
-                        Estratégia {tier.strategy}
-                      </span>
-                    </div>
+                    ML Clássico
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('premium')}
+                    className={`flex-1 py-2.5 text-xs font-bold rounded-xl transition-all ${
+                      activeTab === 'premium'
+                        ? 'bg-emerald-500 text-white shadow-md'
+                        : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-900'
+                    }`}
+                  >
+                    ML Premium
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('shopee')}
+                    className={`flex-1 py-2.5 text-xs font-bold rounded-xl transition-all ${
+                      activeTab === 'shopee'
+                        ? 'bg-emerald-500 text-white shadow-md'
+                        : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-900'
+                    }`}
+                  >
+                    Shopee
+                  </button>
+                </div>
 
-                    <div className="space-y-4">
-                      {/* Pricing Result */}
-                      <div className="space-y-1">
-                        <span className="text-xs text-slate-500 block uppercase font-bold tracking-wider">Preço Recomendado</span>
-                        <h3 className="text-3xl font-black text-white">R$ {tier.price.toFixed(2)}</h3>
+                <div className="grid grid-cols-1 gap-6">
+                  {currentTiers.map((tier, idx) => {
+                    const isIdeal = tier.strategy === 'Ideal';
+                    const isAggr = tier.strategy === 'Agressivo';
+                    
+                    return (
+                      <div 
+                        key={idx}
+                        className={`p-6 bg-slate-950 border rounded-3xl transition-all duration-300 relative ${
+                          isIdeal 
+                            ? 'border-emerald-500 shadow-xl shadow-emerald-500/5 ring-1 ring-emerald-500/20' 
+                            : isAggr
+                            ? 'border-orange-500/60 shadow-md'
+                            : 'border-slate-850 opacity-90'
+                        }`}
+                      >
+                        {/* Strategy Label */}
+                        <div className="absolute top-6 right-6 flex items-center space-x-2">
+                          <span className={`px-2.5 py-1 rounded text-[10px] uppercase font-black tracking-wider ${
+                            isIdeal 
+                              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                              : isAggr
+                              ? 'bg-orange-500/10 text-orange-400 border border-orange-500/20'
+                              : 'bg-slate-800 text-slate-300 border border-slate-700'
+                          }`}>
+                            Estratégia {tier.strategy}
+                          </span>
+                        </div>
+
+                        <div className="space-y-4">
+                          {/* Pricing Result */}
+                          <div className="space-y-1">
+                            <span className="text-xs text-slate-500 block uppercase font-bold tracking-wider">Preço Recomendado</span>
+                            <h3 className="text-3xl font-black text-white">R$ {tier.price.toFixed(2)}</h3>
+                          </div>
+
+                          {/* Performance Indicators */}
+                          <div className="grid grid-cols-3 gap-4">
+                            <div className="p-3 bg-slate-900/60 border border-slate-900 rounded-xl text-center">
+                              <span className="text-[10px] text-slate-500 block uppercase">Lucro Esperado</span>
+                              <span className="font-bold text-emerald-400 text-sm">R$ {tier.profit.toFixed(2)}</span>
+                            </div>
+                            <div className="p-3 bg-slate-900/60 border border-slate-900 rounded-xl text-center">
+                              <span className="text-[10px] text-slate-500 block uppercase">Margem</span>
+                              <span className="font-bold text-slate-200 text-sm">{tier.margin.toFixed(1)}%</span>
+                            </div>
+                            <div className="p-3 bg-slate-900/60 border border-slate-900 rounded-xl text-center">
+                              <span className="text-[10px] text-slate-500 block uppercase">ROI</span>
+                              <span className="font-bold text-slate-200 text-sm">{tier.roi.toFixed(1)}%</span>
+                            </div>
+                          </div>
+
+                          {/* Safety Warning */}
+                          {tier.safety_triggered && (
+                            <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 flex items-center space-x-2 text-xs font-bold">
+                              <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                              <span>Margem de segurança de {minDesiredMargin}% aplicada. O preço foi ajustado para cima.</span>
+                            </div>
+                          )}
+
+                          {/* Description */}
+                          <p className="text-xs text-slate-400 leading-relaxed font-medium">
+                            {tier.description}
+                          </p>
+                        </div>
                       </div>
-
-                      {/* Performance Indicators */}
-                      <div className="grid grid-cols-3 gap-4">
-                        <div className="p-3 bg-slate-900/60 border border-slate-900 rounded-xl text-center">
-                          <span className="text-[10px] text-slate-500 block uppercase">Lucro Esperado</span>
-                          <span className="font-bold text-emerald-400 text-sm">R$ {tier.profit.toFixed(2)}</span>
-                        </div>
-                        <div className="p-3 bg-slate-900/60 border border-slate-900 rounded-xl text-center">
-                          <span className="text-[10px] text-slate-500 block uppercase">Margem</span>
-                          <span className="font-bold text-slate-200 text-sm">{tier.margin.toFixed(1)}%</span>
-                        </div>
-                        <div className="p-3 bg-slate-900/60 border border-slate-900 rounded-xl text-center">
-                          <span className="text-[10px] text-slate-500 block uppercase">ROI</span>
-                          <span className="font-bold text-slate-200 text-sm">{tier.roi.toFixed(1)}%</span>
-                        </div>
-                      </div>
-
-                      {/* Description */}
-                      <p className="text-xs text-slate-400 leading-relaxed font-medium">
-                        {tier.description}
-                      </p>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
         </div>
       </div>
     </div>

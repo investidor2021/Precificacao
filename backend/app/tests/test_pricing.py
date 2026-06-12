@@ -68,25 +68,57 @@ async def test_smart_pricing_engine_sheets():
     sheets_db.get_operational_costs.return_value = []
     sheets_db.get_ml_config.return_value = {
         "classic_commission_rate": 11.5,
+        "premium_commission_rate": 16.5,
         "fixed_fee_threshold": 79.0,
         "fixed_fee": 6.0,
         "tax_rate": 4.0,
         "shipping_subsidy_rate": 50.0
     }
+    sheets_db.get_shopee_config.return_value = {
+        "commission_rate": 14.0,
+        "service_fee_rate": 6.0,
+        "transaction_fee_rate": 2.0,
+        "tax_rate": 4.0,
+        "fixed_fee": 3.0,
+        "has_free_shipping_program": True,
+        "has_cashback_program": False
+    }
     
     req = SmartPricingRequest(
         product_id=1,
         category="Electronics",
-        competitors=[50.0, 52.0, 48.0]
+        competitors=[50.0, 52.0, 48.0],
+        min_desired_margin=15.0
     )
     
     res = await calculate_smart_pricing(sheets_db, req)
     
-    assert len(res.tiers) == 3
-    assert res.tiers[0].strategy == "Mínimo"
-    assert res.tiers[1].strategy == "Ideal"
-    assert res.tiers[2].strategy == "Agressivo"
-    assert res.tiers[2].price <= 48.0
+    # Classic tiers
+    assert len(res.mercado_livre_classic) == 3
+    assert res.mercado_livre_classic[0].strategy == "Mínimo"
+    assert res.mercado_livre_classic[1].strategy == "Ideal"
+    assert res.mercado_livre_classic[2].strategy == "Agressivo"
+    
+    # Premium tiers
+    assert len(res.mercado_livre_premium) == 3
+    assert res.mercado_livre_premium[0].strategy == "Mínimo"
+    
+    # Shopee tiers
+    assert len(res.shopee) == 3
+    assert res.shopee[0].strategy == "Mínimo"
+
+    # Verify that the safety margin triggered works
+    # If competitors were extremely low, say [12.0], making Aggressive margin < 15%
+    req_unsafe = SmartPricingRequest(
+        product_id=1,
+        category="Electronics",
+        competitors=[12.0],
+        min_desired_margin=15.0
+    )
+    res_unsafe = await calculate_smart_pricing(sheets_db, req_unsafe)
+    assert res_unsafe.mercado_livre_classic[2].safety_triggered is True
+    # The margin of the capped price should be exactly 15.0%
+    assert round(res_unsafe.mercado_livre_classic[2].margin, 1) == 15.0
 
 @pytest.mark.asyncio
 async def test_kit_simulation_pricing():

@@ -508,7 +508,6 @@ export default function ProductsPage() {
                         <th className="px-6 py-4">Qtd. Adquirida</th>
                         <th className="px-6 py-4">Custo Unitário</th>
                         <th className="px-6 py-4">Custo Total</th>
-                        <th className="px-6 py-4">Custo Carregado</th>
                         <th className="px-6 py-4">Medidas (CxLxA)</th>
                         <th className="px-6 py-4">Peso Cúbico</th>
                         <th className="px-6 py-4 text-right">Ações</th>
@@ -523,7 +522,6 @@ export default function ProductsPage() {
                           <td className="px-6 py-4 text-slate-600 dark:text-slate-400 font-bold">{p.quantity_acquired}</td>
                           <td className="px-6 py-4 text-slate-600 dark:text-slate-400">R$ {p.purchase_cost.toFixed(2)}</td>
                           <td className="px-6 py-4 font-bold text-emerald-500">R$ {(p.purchase_cost * p.quantity_acquired).toFixed(2)}</td>
-                          <td className="px-6 py-4 font-semibold text-emerald-500">R$ {p.unit_cost.toFixed(2)}</td>
                           <td className="px-6 py-4 text-slate-500">
                             {p.length}x{p.width}x{p.height} cm
                           </td>
@@ -559,7 +557,6 @@ export default function ProductsPage() {
                         <td className="px-6 py-4 text-emerald-500 font-black">
                           R$ {products.reduce((acc, p) => acc + (p.purchase_cost * p.quantity_acquired), 0).toFixed(2)}
                         </td>
-                        <td className="px-6 py-4"></td>
                         <td className="px-6 py-4"></td>
                         <td className="px-6 py-4"></td>
                         <td className="px-6 py-4"></td>

@@ -18,10 +18,13 @@ import { Product, ComparatorResponse } from '@/types';
 export default function ComparePage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [kits, setKits] = useState<any[]>([]);
+  const [packagings, setPackagings] = useState<any[]>([]);
   const [selectedItemKey, setSelectedItemKey] = useState<string>('');
   const [referencePrice, setReferencePrice] = useState<string>('');
   const [shippingOverride, setShippingOverride] = useState<string>('');
   const [freeShipping, setFreeShipping] = useState(false);
+  const [category, setCategory] = useState<string>('');
+  const [packagingOverrideId, setPackagingOverrideId] = useState<number | null>(null);
 
   const [compareData, setCompareData] = useState<ComparatorResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -33,12 +36,14 @@ export default function ComparePage() {
 
   const loadProductsAndKits = async () => {
     try {
-      const [prodRes, kitRes] = await Promise.all([
+      const [prodRes, kitRes, pkgRes] = await Promise.all([
         api.getProducts(),
-        api.getKits()
+        api.getKits(),
+        api.getPackaging()
       ]);
       setProducts(prodRes);
       setKits(kitRes);
+      setPackagings(pkgRes);
       if (prodRes.length > 0) {
         setSelectedItemKey(`product_${prodRes[0].id}`);
       } else if (kitRes.length > 0) {
@@ -72,7 +77,9 @@ export default function ComparePage() {
         reference_price: refPriceVal && refPriceVal > 0 ? refPriceVal : undefined,
         shipping_override: overrideVal,
         is_kit: isKit,
-        free_shipping: freeShipping
+        free_shipping: freeShipping,
+        category: category || undefined,
+        packaging_override_id: packagingOverrideId
       });
       setCompareData(res);
     } catch (err: any) {
@@ -87,18 +94,21 @@ export default function ComparePage() {
   // Reset custom reference price to let backend decide standard 1.5x cost only when item changes
   useEffect(() => {
     setReferencePrice('');
+    setPackagingOverrideId(null);
   }, [selectedItemKey]);
 
-  // Re-run comparison when product updates or free shipping is toggled
+  // Re-run comparison when selectors change to make it feel alive!
   useEffect(() => {
     if (selectedItemKey) {
       handleCompare();
     }
-  }, [selectedItemKey, freeShipping]);
+  }, [selectedItemKey, freeShipping, category, packagingOverrideId]);
 
   const selectedItem = selectedItemKey.startsWith('kit_')
     ? kits.find(k => `kit_${k.id}` === selectedItemKey)
     : products.find(p => `product_${p.id}` === selectedItemKey);
+
+  const containers = packagings.filter(p => p.type === 'box' || p.type === 'envelope');
 
   return (
     <div className="p-6 md:p-8 space-y-8 max-w-7xl mx-auto w-full">
@@ -126,7 +136,7 @@ export default function ComparePage() {
           {/* Settings Bar */}
           <div className="p-6 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm">
             <form onSubmit={handleCompare} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-6 items-end">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4 items-end">
                 <div className="space-y-1">
                   <label className="text-xs text-slate-400 font-bold uppercase">Selecionar Produto / Kit</label>
                   <select
@@ -177,9 +187,46 @@ export default function ComparePage() {
                   </div>
                 </div>
 
+                <div className="space-y-1">
+                  <label className="text-xs text-slate-400 font-bold uppercase">Departamento / Categoria</label>
+                  <select
+                    value={category}
+                    onChange={(e) => setCategory(e.target.value)}
+                    className="w-full px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-800 dark:text-slate-200"
+                  >
+                    <option value="">Padrão (Planilha)</option>
+                    <option value="veiculo">Acessórios para Veículos</option>
+                    <option value="agro">Agro, Alimentos e Bebidas</option>
+                    <option value="brinquedo">Brinquedos, Bebês e Hobbies</option>
+                    <option value="sapato">Calçados, Roupas e Bolsas (Moda)</option>
+                    <option value="casa">Casa, Móveis, Decoração e Ferramentas</option>
+                    <option value="eletronico">Celulares, Computadores e Tecnologia</option>
+                    <option value="esporte">Esportes e Fitness</option>
+                    <option value="livro">Livros, Revistas, Filmes e Música</option>
+                    <option value="beleza">Beleza, Cuidado Pessoal, Saúde e Joias</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs text-slate-400 font-bold uppercase">Embalagem</label>
+                  <select
+                    value={packagingOverrideId || ''}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setPackagingOverrideId(val ? parseInt(val) : null);
+                    }}
+                    className="w-full px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-800 dark:text-slate-200"
+                  >
+                    <option value="">Auto (Recomendada)</option>
+                    {containers.map(c => (
+                      <option key={c.id} value={c.id}>{c.name} (R$ {c.cost.toFixed(2)})</option>
+                    ))}
+                  </select>
+                </div>
+
                 <button
                   type="submit" disabled={loading}
-                  className="py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg font-bold text-sm shadow-md shadow-emerald-500/10 transition flex items-center justify-center space-x-2"
+                  className="py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg font-bold text-sm shadow-md shadow-emerald-500/10 transition flex items-center justify-center space-x-2 w-full"
                 >
                   <ArrowLeftRight className="w-4 h-4" />
                   <span>{loading ? 'Comparando...' : 'Comparar Canais'}</span>

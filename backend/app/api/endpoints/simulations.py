@@ -19,6 +19,8 @@ class ExtendedComparatorRequest(BaseModel):
     shipping_override: Optional[float] = None
     is_kit: Optional[bool] = False
     free_shipping: Optional[bool] = False
+    category: Optional[str] = None
+    packaging_override_id: Optional[int] = None
 
 @router.post("/simulate", response_model=SimulatorResult)
 async def simulate_price(request: SimulatorRequest):
@@ -99,7 +101,9 @@ async def compare_marketplaces(request: ExtendedComparatorRequest):
             input_value=ref_price,
             shipping_override=request.shipping_override,
             is_kit=getattr(request, "is_kit", False),
-            free_shipping=getattr(request, "free_shipping", False)
+            free_shipping=getattr(request, "free_shipping", False),
+            category=request.category,
+            packaging_override_id=request.packaging_override_id
         )
         
         try:
