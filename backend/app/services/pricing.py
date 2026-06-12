@@ -1,5 +1,67 @@
+import re
 from typing import Dict, Any
 from app.schemas.schemas import SimulatorRequest, SimulatorResult
+
+def parse_dimensions_from_name(name: str) -> list:
+    # Match patterns like 16x11x6, 16 x 11 x 6, 20x15, 20 x 15, etc.
+    match = re.search(r'\d+(?:\.\d+)?\s*[xX\u00d7]\s*\d+(?:\.\d+)?(?:\s*[xX\u00d7]\s*\d+(?:\.\d+)?)?', name.replace(',', '.'))
+    if match:
+        parts = re.split(r'[xX\u00d7]', match.group(0))
+        return [float(p.strip()) for p in parts if p.strip()]
+    return []
+
+def calculate_packaging_cost(product: Dict[str, Any], packagings: list) -> float:
+    containers = []
+    accessories_cost = 0.0
+    
+    for pkg in packagings:
+        pkg_type = pkg.get("type", "")
+        name = pkg.get("name", "")
+        cost = pkg.get("cost", 0.0)
+        
+        if pkg_type in ["box", "envelope"]:
+            dims = parse_dimensions_from_name(name)
+            containers.append({
+                "cost": cost,
+                "type": pkg_type,
+                "dims": dims
+            })
+        else:
+            accessories_cost += cost
+            
+    if not containers:
+        return accessories_cost
+        
+    h = product.get("height", 0.0)
+    w = product.get("width", 0.0)
+    l = product.get("length", 0.0)
+    p_dims = sorted([h, w, l])
+    
+    if p_dims[2] > 0:
+        fitting_containers = []
+        for c in containers:
+            c_dims = c["dims"]
+            if not c_dims:
+                continue
+            if c["type"] == "envelope" and len(c_dims) == 2:
+                c_dims_sorted = sorted([2.0] + c_dims)
+            else:
+                c_dims_sorted = sorted(c_dims)
+                while len(c_dims_sorted) < 3:
+                    c_dims_sorted.insert(0, 1.0)
+            
+            if p_dims[0] <= c_dims_sorted[0] and p_dims[1] <= c_dims_sorted[1] and p_dims[2] <= c_dims_sorted[2]:
+                fitting_containers.append(c)
+                
+        if fitting_containers:
+            cheapest = min(fitting_containers, key=lambda x: x["cost"])
+            return cheapest["cost"] + accessories_cost
+        else:
+            most_expensive = max(containers, key=lambda x: x["cost"])
+            return most_expensive["cost"] + accessories_cost
+            
+    cheapest = min(containers, key=lambda x: x["cost"])
+    return cheapest["cost"] + accessories_cost
 
 async def calculate_cubic_weight(height: float, width: float, length: float) -> float:
     # Cubic weight formula: (H * W * L) / 6000
@@ -10,7 +72,7 @@ async def calculate_cubic_weight(height: float, width: float, length: float) -> 
 async def get_loaded_unit_cost(sheets_db, product: Dict[str, Any]) -> float:
     # Fetch packaging from sheets
     packagings = sheets_db.get_packaging()
-    total_packaging_cost = sum(pkg["cost"] for pkg in packagings)
+    total_packaging_cost = calculate_packaging_cost(product, packagings)
     
     # Fetch operational costs from sheets
     op_costs = sheets_db.get_operational_costs()
@@ -60,7 +122,7 @@ async def simulate_pricing_engine(sheets_db, request: SimulatorRequest) -> Simul
         
     # Calculate detailed cost components
     packagings = sheets_db.get_packaging()
-    packaging_cost = sum(pkg["cost"] for pkg in packagings)
+    packaging_cost = calculate_packaging_cost(product, packagings)
     
     op_costs = sheets_db.get_operational_costs()
     fixed_operational_monthly = sum(oc["amount"] for oc in op_costs if oc["type"] == "fixed")

@@ -265,4 +265,35 @@ async def test_simulate_pricing_engine_breakdown():
     assert res_over.shipping_discount_val == 12.45
 
 
+def test_calculate_packaging_cost_selection():
+    from app.services.pricing import calculate_packaging_cost
+    
+    # All packaging options
+    pkgs = [
+        {"cost": 1.50, "name": "Caixa P 16x11x6 cm", "type": "box"},
+        {"cost": 2.20, "name": "Caixa M 20x16x7 cm", "type": "box"},
+        {"cost": 1.00, "name": "Envelope Bolha 20x15 cm", "type": "envelope"},
+        {"cost": 0.30, "name": "Fita Adesiva", "type": "tape"}
+    ]
+    
+    # Product fits in envelope: 15x10x1 cm -> Sorted: 1, 10, 15. Envelope is: sorted([2, 15, 20]) -> 2, 15, 20. Fits!
+    prod_small = {"height": 10.0, "width": 15.0, "length": 1.0}
+    cost_small = calculate_packaging_cost(prod_small, pkgs)
+    # Envelope (1.00) + Fita (0.30) = 1.30
+    assert cost_small == 1.30
+    
+    # Product does not fit in envelope but fits in Box P: 15x10x5 cm -> Sorted: 5, 10, 15. Box P is sorted: 6, 11, 16. Fits!
+    prod_medium = {"height": 10.0, "width": 15.0, "length": 5.0}
+    cost_medium = calculate_packaging_cost(prod_medium, pkgs)
+    # Box P (1.50) + Fita (0.30) = 1.80
+    assert cost_medium == 1.80
+    
+    # Product does not fit in Box P but fits in Box M: 18x12x7 cm -> Sorted: 7, 12, 18. Box M is sorted: 7, 16, 20. Fits!
+    prod_large = {"height": 12.0, "width": 18.0, "length": 7.0}
+    cost_large = calculate_packaging_cost(prod_large, pkgs)
+    # Box M (2.20) + Fita (0.30) = 2.50
+    assert cost_large == 2.50
+
+
+
 
