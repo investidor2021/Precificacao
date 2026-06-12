@@ -87,28 +87,61 @@ async def get_loaded_unit_cost(sheets_db, product: Dict[str, Any]) -> float:
     loaded_cost = product["purchase_cost"] + total_packaging_cost + fixed_allocation + variable_operational_unit
     return round(loaded_cost, 2)
 
+def get_ml_2026_shipping_fee(reputation: str, weight: float, price: float = 79.0) -> float:
+    rep = reputation.lower()
+    is_under_threshold = (price < 79.0)
+    if rep == "verde":
+        if weight <= 0.3: return 5.65 if is_under_threshold else 20.95
+        elif weight <= 0.5: return 5.95 if is_under_threshold else 22.55
+        elif weight <= 1.0: return 6.05 if is_under_threshold else 23.65
+        elif weight <= 1.5: return 6.15 if is_under_threshold else 24.65
+        elif weight <= 2.0: return 6.25 if is_under_threshold else 24.65
+        elif weight <= 3.0: return 6.35 if is_under_threshold else 26.25
+        elif weight <= 4.0: return 6.45 if is_under_threshold else 28.35
+        elif weight <= 5.0: return 6.55 if is_under_threshold else 30.75
+        elif weight <= 9.0: return 39.75
+        elif weight <= 20.0: return 91.15
+        elif weight <= 40.0: return 107.05
+        elif weight <= 80.0: return 132.25
+        elif weight <= 100.0: return 167.95
+        elif weight <= 150.0: return 199.45
+        else: return 261.95
+    elif rep == "amarela":
+        if weight <= 0.3: return 6.46 if is_under_threshold else 25.14
+        elif weight <= 0.5: return 6.80 if is_under_threshold else 27.06
+        elif weight <= 1.0: return 6.91 if is_under_threshold else 28.38
+        elif weight <= 2.0: return 29.58
+        elif weight <= 5.0: return 36.90
+        elif weight <= 9.0: return 59.22
+        elif weight <= 20.0: return 109.38
+        elif weight <= 40.0: return 128.46
+        elif weight <= 80.0: return 176.34
+        elif weight <= 100.0: return 201.54
+        elif weight <= 150.0: return 239.34
+        else: return 314.34
+    else:  # vermelha / base
+        if weight <= 0.3: return 8.07 if is_under_threshold else 41.90
+        elif weight <= 0.5: return 8.50 if is_under_threshold else 45.10
+        elif weight <= 1.0: return 8.64 if is_under_threshold else 47.30
+        elif weight <= 2.0: return 49.30
+        elif weight <= 5.0: return 61.50
+        elif weight <= 9.0: return 98.70
+        elif weight <= 20.0: return 182.30
+        elif weight <= 40.0: return 214.10
+        elif weight <= 80.0: return 293.90
+        elif weight <= 100.0: return 335.90
+        elif weight <= 150.0: return 398.90
+        else: return 523.90
+
 async def get_ml_raw_shipping_fee(weight: float, height: float, width: float, length: float) -> float:
     cubic = await calculate_cubic_weight(height, width, length)
     effective_weight = max(weight, cubic)
-    
-    # Default Brazilian marketplace logistics bracket fees
-    if effective_weight <= 0.5:
-        return 19.90
-    elif effective_weight <= 1.0:
-        return 22.90
-    elif effective_weight <= 2.0:
-        return 24.90
-    elif effective_weight <= 5.0:
-        return 29.90
-    elif effective_weight <= 9.0:
-        return 39.90
-    else:
-        return 59.90
+    return get_ml_2026_shipping_fee("vermelha", effective_weight, price=79.0)
 
 async def get_ml_shipping_cost(sheets_db, weight: float, height: float, width: float, length: float, ml_config: Dict[str, Any]) -> float:
-    raw_fee = await get_ml_raw_shipping_fee(weight, height, width, length)
-    discount = ml_config["shipping_subsidy_rate"] / 100.0
-    return round(raw_fee * (1.0 - discount), 2)
+    cubic = await calculate_cubic_weight(height, width, length)
+    effective_weight = max(weight, cubic)
+    return get_ml_2026_shipping_fee("verde", effective_weight, price=79.0)
 
 async def simulate_pricing_engine(sheets_db, request: SimulatorRequest) -> SimulatorResult:
     # 1. Fetch Product or Kit
@@ -154,19 +187,32 @@ async def simulate_pricing_engine(sheets_db, request: SimulatorRequest) -> Simul
         fixed_fee_threshold = ml_config["fixed_fee_threshold"]
         fixed_fee = ml_config["fixed_fee"]
         
-        raw_fee_bracket = await get_ml_raw_shipping_fee(product["weight"], product["height"], product["width"], product["length"])
-        reputation_active = getattr(request, "reputation_good", True)
-        discount_rate = ml_config["shipping_subsidy_rate"] if reputation_active else 0.0
-        discount = discount_rate / 100.0
-        subsidized_shipping = round(raw_fee_bracket * (1.0 - discount), 2)
+        # Determine reputation and select appropriate fee
+        req_rep = getattr(request, "reputation", None)
+        if not req_rep:
+            reputation_active = getattr(request, "reputation_good", True)
+            reputation = "verde" if reputation_active else "amarela"
+        else:
+            reputation = req_rep.lower()
+            if reputation not in ["verde", "amarela", "vermelha"]:
+                reputation = "verde"
+                
+        cubic = await calculate_cubic_weight(product["height"], product["width"], product["length"])
+        effective_weight = max(product["weight"], cubic)
+        
+        raw_fee_bracket_over = get_ml_2026_shipping_fee("vermelha", effective_weight, price=79.0)
+        raw_fee_bracket_under = get_ml_2026_shipping_fee("vermelha", effective_weight, price=0.0)
+        
+        subsidized_shipping_over = get_ml_2026_shipping_fee(reputation, effective_weight, price=79.0)
+        subsidized_shipping_under = get_ml_2026_shipping_fee(reputation, effective_weight, price=0.0)
         
         if request.shipping_override is not None:
             shipping_cost_over = request.shipping_override
             shipping_cost_under = request.shipping_override
         else:
-            shipping_cost_over = subsidized_shipping
+            shipping_cost_over = subsidized_shipping_over
             if getattr(request, "free_shipping", False):
-                shipping_cost_under = subsidized_shipping
+                shipping_cost_under = subsidized_shipping_under
             else:
                 shipping_cost_under = 0.0 # Under 79, buyer pays
             
@@ -198,8 +244,12 @@ async def simulate_pricing_engine(sheets_db, request: SimulatorRequest) -> Simul
                     raw_shipping_val = request.shipping_override
                     shipping_discount_val = 0.0
                 else:
-                    raw_shipping_val = raw_fee_bracket
-                    shipping_discount_val = round(raw_fee_bracket * discount, 2)
+                    if p < fixed_fee_threshold:
+                        raw_shipping_val = raw_fee_bracket_under
+                        shipping_discount_val = round(raw_fee_bracket_under - subsidized_shipping_under, 2)
+                    else:
+                        raw_shipping_val = raw_fee_bracket_over
+                        shipping_discount_val = round(raw_fee_bracket_over - subsidized_shipping_over, 2)
                     
             return p, profit, margin, roi, markup, fee, ship, tax, commission_percent_val, fixed_fee_val, raw_shipping_val, shipping_discount_val
             

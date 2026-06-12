@@ -96,6 +96,7 @@ export const api = {
     marketplace: string;
     mode: number;
     input_value: number;
+    reputation?: string;
     shipping_override?: number;
     is_kit?: boolean;
     free_shipping?: boolean;

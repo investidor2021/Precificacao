@@ -25,6 +25,7 @@ export default function SimulatorPage() {
   const [inputValue, setInputValue] = useState<string>('');
   const [shippingOverride, setShippingOverride] = useState<string>('');
   const [freeShipping, setFreeShipping] = useState(false);
+  const [reputation, setReputation] = useState<string>('verde');
   
   const [result, setResult] = useState<SimulatorResult | null>(null);
   const [loading, setLoading] = useState(false);
@@ -87,6 +88,7 @@ export default function SimulatorPage() {
         marketplace,
         mode,
         input_value: parseFormFloat(inputValue),
+        reputation,
         shipping_override: overrideVal,
         is_kit: isKit,
         free_shipping: freeShipping
@@ -106,7 +108,7 @@ export default function SimulatorPage() {
     if (selectedItemKey && parseFormFloat(inputValue) > 0) {
       handleCalculate();
     }
-  }, [selectedItemKey, marketplace, mode, freeShipping]);
+  }, [selectedItemKey, marketplace, mode, freeShipping, reputation]);
 
   const selectedItem = selectedItemKey.startsWith('kit_')
     ? kits.find(k => `kit_${k.id}` === selectedItemKey)
@@ -195,6 +197,32 @@ export default function SimulatorPage() {
                   ))}
                 </div>
               </div>
+
+              {/* Reputation Selector (Mercado Livre only) */}
+              {marketplace.startsWith('mercado_livre') && (
+                <div className="space-y-1">
+                  <label className="text-xs text-slate-400 font-bold uppercase">Reputação do Vendedor (Tabela 2026)</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { key: 'verde', label: 'Verde / Líder' },
+                      { key: 'amarela', label: 'Amarela' },
+                      { key: 'vermelha', label: 'Vermelha' }
+                    ].map((rep) => (
+                      <button
+                        key={rep.key} type="button"
+                        onClick={() => setReputation(rep.key)}
+                        className={`py-2 rounded-lg text-xs font-semibold border transition ${
+                          reputation === rep.key
+                            ? 'bg-emerald-500/10 border-emerald-500 text-emerald-500'
+                            : 'border-slate-200 dark:border-slate-850 hover:bg-slate-900 text-slate-400'
+                        }`}
+                      >
+                        {rep.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Solve Mode Selector */}
               <div className="space-y-1">
@@ -429,7 +457,7 @@ export default function SimulatorPage() {
                             <span>R$ {result.raw_shipping_val.toFixed(2)}</span>
                           </div>
                           <div className="flex justify-between text-emerald-500">
-                            <span>Subsídio do Canal (Reputação Verde)</span>
+                            <span>Subsídio do Canal (Reputação {reputation.charAt(0).toUpperCase() + reputation.slice(1)})</span>
                             <span>- R$ {result.shipping_discount_val.toFixed(2)}</span>
                           </div>
                         </div>

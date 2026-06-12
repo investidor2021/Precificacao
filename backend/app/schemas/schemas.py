@@ -148,6 +148,7 @@ class SimulatorRequest(BaseModel):
     mode: int # 1 = Selling Price, 2 = Desired Margin %, 3 = Desired Profit R$
     input_value: float # selling price R$, margin % (e.g. 20 for 20%), or profit R$
     reputation_good: Optional[bool] = True
+    reputation: Optional[str] = "verde" # "verde", "amarela", "vermelha"
     shipping_override: Optional[float] = None
     is_kit: Optional[bool] = False
     free_shipping: Optional[bool] = False

@@ -44,10 +44,9 @@ async def test_get_ml_shipping_cost_sheets():
     sheets_db = MagicMock()
     ml_config = {"shipping_subsidy_rate": 50.0}
     
-    # Product fits 1.5kg bracket -> standard fee R$ 24.90
-    # Subsidized 50% -> R$ 12.45
+    # Product fits 1.5kg bracket -> standard fee R$ 24.65 in 2026 Verde table
     shipping = await get_ml_shipping_cost(sheets_db, 1.5, 10, 10, 10, ml_config)
-    assert shipping == 12.45
+    assert shipping == 24.65
 
 @pytest.mark.asyncio
 async def test_smart_pricing_engine_sheets():
@@ -135,7 +134,9 @@ async def test_kit_simulation_pricing():
     
     assert res.unit_cost == 40.0
     assert res.price == 100.0
-    assert res.net_profit == 34.55
+    # Shipping cost in 2026 Verde table for 0.5kg is 22.55
+    # Net profit: 100 - 40 - 11.5 (comm) - 22.55 (ship) - 4 (tax) = 21.95
+    assert res.net_profit == 21.95
 
 @pytest.mark.asyncio
 async def test_kit_simulation_pricing_free_shipping_under_79():
@@ -184,8 +185,10 @@ async def test_kit_simulation_pricing_free_shipping_under_79():
     
     assert res.unit_cost == 40.0
     assert res.price == 75.0
-    assert res.shipping_cost == 9.95
-    assert res.net_profit == 7.43
+    # Shipping cost in 2026 Verde table under threshold (<79) for 0.5kg is 5.95
+    assert res.shipping_cost == 5.95
+    # Net profit: 75 - 40 - 8.62 (comm) - 5.95 (ship) - 6 (fixed) - 3 (tax) = 11.43
+    assert res.net_profit == 11.43
 
 
 @pytest.mark.asyncio
@@ -259,10 +262,10 @@ async def test_simulate_pricing_engine_breakdown():
     assert res_over.price == 100.0
     assert res_over.commission_percent_val == 11.50
     assert res_over.fixed_fee_val == 0.0
-    # 1.5kg fits in 1.0kg - 2.0kg bracket: 24.90. Subsidized 50%: 12.45
-    assert res_over.shipping_cost == 12.45
-    assert res_over.raw_shipping_val == 24.90
-    assert res_over.shipping_discount_val == 12.45
+    # 1.5kg fits in 1.0kg - 2.0kg bracket: 24.65 in 2026 Verde table, base is 49.30, discount is 24.65
+    assert res_over.shipping_cost == 24.65
+    assert res_over.raw_shipping_val == 49.30
+    assert res_over.shipping_discount_val == 24.65
 
 
 def test_calculate_packaging_cost_selection():
